@@ -1,0 +1,40 @@
+appId: com.wecode.desktop
+productName: WeCode
+copyright: Copyright (c) 2026 WeCode
+asar: true
+npmRebuild: false
+nodeGypRebuild: false
+publish: null
+directories:
+  output: release
+  buildResources: apps/desktop/resources
+files:
+  - apps/desktop/dist/*.cjs
+  - "!apps/desktop/dist/*.test.cjs"
+  - apps/desktop/renderer/dist/**/*
+  - apps/desktop/resources/icon.ico
+  - apps/desktop/resources/icon.png
+  - package.json
+  - "!**/.env*"
+  - "!**/tests/**"
+  - "!**/test-results/**"
+  - "!**/playwright-report/**"
+win:
+  executableName: WeCode
+  icon: apps/desktop/resources/icon.ico
+  target:
+    - target: nsis
+      arch: [x64]
+    - target: portable
+      arch: [x64]
+  requestedExecutionLevel: asInvoker
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: WeCode
+  artifactName: WeCode-${version}-Setup-${arch}.${ext}
+portable:
+  artifactName: WeCode-${version}-Portable-${arch}.${ext}

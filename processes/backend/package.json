@@ -1,0 +1,61 @@
+{
+  "name": "@wecode/backend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.12"
+  },
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "dev:worker": "tsx watch src/worker.ts",
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "start": "node dist/server.js",
+    "worker": "node dist/worker.js",
+    "test": "vitest run",
+    "test:integration": "vitest run tests/integration",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate deploy",
+    "db:validate": "prisma validate",
+    "format": "prettier --write src tests prisma *.ts *.json",
+    "docs": "tsx src/docs/generate-openapi.ts",
+    "smoke": "tsx scripts/smoke.ts",
+    "browser:install": "playwright install chromium",
+    "test:engine": "vitest run tests/integration/engine.test.ts tests/unit/browser-pool.test.ts"
+  },
+  "dependencies": {
+    "@prisma/adapter-pg": "^7.0.0",
+    "@prisma/client": "^7.0.0",
+    "bullmq": "^5.61.2",
+    "csv-parse": "^7.0.3",
+    "dotenv": "^17.2.3",
+    "exceljs": "^4.4.0",
+    "express": "^5.1.0",
+    "express-rate-limit": "^8.1.0",
+    "helmet": "^8.1.0",
+    "http-proxy-agent": "^7.0.2",
+    "https-proxy-agent": "^7.0.6",
+    "imapflow": "^1.0.200",
+    "ioredis": "^5.8.2",
+    "mailparser": "^3.7.4",
+    "pg": "^8.16.3",
+    "pino": "^10.0.0",
+    "playwright": "^1.65.0",
+    "socks-proxy-agent": "^8.0.5",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.3",
+    "@types/mailparser": "^3.4.6",
+    "@types/node": "^22.0.0",
+    "@types/pg": "^8.15.5",
+    "@types/supertest": "^6.0.3",
+    "prettier": "^3.6.2",
+    "prisma": "^7.0.0",
+    "supertest": "^7.1.4",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.0",
+    "vitest": "^5.1.0"
+  }
+}

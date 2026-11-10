@@ -1,0 +1,171 @@
+import { isDeepStrictEqual } from 'node:util';
+import { createHash } from 'node:crypto';
+import type { TaskCreate } from '../contracts/schemas.js';
+import type { Transaction } from '../core/events.js';
+import { audit } from '../core/events.js';
+import { AppError, conflict, notFound } from '../core/errors.js';
+import { json } from '../core/json.js';
+import type { TaskRepository } from '../repositories/task.repository.js';
+import type { Task } from '@prisma/client';
+export class TaskManager {
+  constructor(private readonly repo: TaskRepository) {}
+  list(input: Parameters<TaskRepository['list']>[0]) {
+    return this.repo.list(input);
+  }
+  get(id: string) {
+    return this.repo.get(id);
+  }
+  async create(input: TaskCreate, key?: string) {
+    const hash = createHash('sha256').update(JSON.stringify(input)).digest('hex');
+    if (key) {
+      const existing = await this.repo.db.task.findUnique({ where: { createKey: key } });
+      if (existing) {
+        if (existing.requestHash !== hash)
+          throw conflict('Idempotency key was already used for different input.');
+        return existing;
+      }
+    }
+    try {
+      return await this.repo.db.$transaction(async (tx) => {
+        const task = await tx.task.create({
+          data: {
+            name: input.name,
+            config: json(input.config),
+            emailConfigId: input.emailConfigId,
+            createKey: key,
+            requestHash: key ? hash : undefined,
+          },
+        });
+        await audit(tx, 'task.created', task.id);
+        return task;
+      });
+    } catch (error) {
+      if (key && (error as { code?: string }).code === 'P2002') {
+        const existing = await this.repo.db.task.findUnique({ where: { createKey: key } });
+        if (existing && existing.requestHash === hash) return existing;
+      }
+      throw error;
+    }
+  }
+  async update(id: string, input: TaskCreate, version: number) {
+    return this.repo.locked(id, async (tx, task) => {
+      this.version(task, version);
+      if (!['DRAFT', 'PAUSED', 'FAILED', 'BLOCKED'].includes(task.status))
+        throw conflict('Task configuration cannot be changed in this state.');
+      const run = task.currentRunId
+        ? await tx.taskRun.findUnique({ where: { id: task.currentRunId } })
+        : null;
+      if (run && run.outcome !== 'NOT_CREATED')
+        throw conflict('A task with created or uncertain external state cannot be reconfigured.');
+      const inputsChanged =
+        !isDeepStrictEqual(task.config, input.config) ||
+        task.emailConfigId !== (input.emailConfigId ?? null);
+      const updated = await tx.task.update({
+        where: { id },
+        data: {
+          ...(inputsChanged
+            ? { status: 'DRAFT' as const, currentRunId: null, desiredState: 'paused' }
+            : {}),
+          name: input.name,
+          config: json(input.config),
+          emailConfigId: input.emailConfigId ?? null,
+          version: { increment: 1 },
+        },
+      });
+      await audit(tx, 'task.updated', id);
+      return updated;
+    });
+  }
+  async delete(id: string, version: number) {
+    return this.repo.locked(id, async (tx, task) => {
+      this.version(task, version);
+      if (['RUNNING', 'QUEUED', 'PAUSE_REQUESTED', 'NEEDS_RECONCILIATION'].includes(task.status))
+        throw conflict('Stop at a safe checkpoint before deleting this task.');
+      await tx.task.update({
+        where: { id },
+        data: { deletedAt: new Date(), version: { increment: 1 } },
+      });
+      await audit(tx, 'task.deleted', id);
+    });
+  }
+  async command(id: string, action: 'start' | 'pause' | 'resume' | 'retry', version: number) {
+    return this.repo.locked(id, async (tx, task) => {
+      this.version(task, version);
+      const previous = task.currentRunId
+        ? await tx.taskRun.findUnique({ where: { id: task.currentRunId } })
+        : null;
+      if (action === 'pause') {
+        if (!['RUNNING', 'QUEUED', 'PAUSE_REQUESTED'].includes(task.status))
+          throw conflict('Only queued or running tasks can be paused.');
+        if (task.status === 'QUEUED' && previous) {
+          await tx.taskRun.update({
+            where: { id: previous.id },
+            data: { status: 'PAUSED', finishedAt: new Date() },
+          });
+        }
+        const status = task.status === 'QUEUED' ? 'PAUSED' : 'PAUSE_REQUESTED';
+        const updated = await tx.task.update({
+          where: { id },
+          data: { desiredState: 'paused', status, version: { increment: 1 } },
+        });
+        await audit(tx, 'task.pause_requested', id);
+        return updated;
+      }
+      if (action === 'start' && task.status !== 'DRAFT')
+        throw conflict('Only a draft task can be started.');
+      if (action === 'resume' && task.status !== 'PAUSED')
+        throw conflict('Only an acknowledged paused task can be resumed.');
+      if (
+        action === 'retry' &&
+        (!['FAILED', 'BLOCKED'].includes(task.status) ||
+          !previous?.retryable ||
+          previous.outcome !== 'NOT_CREATED')
+      )
+        throw conflict('This task cannot be retried safely. Reconciliation may be required.');
+      if (task.status === 'NEEDS_RECONCILIATION' || previous?.outcome === 'UNKNOWN')
+        throw conflict('Resolve the external outcome before restarting.');
+      if (!task.emailConfigId)
+        throw new AppError(
+          'MAILBOX_REQUIRED',
+          'Configure a mailbox before starting an account creation task.',
+          422,
+        );
+      const mailbox = await tx.emailConfig.findUnique({ where: { id: task.emailConfigId } });
+      if (!mailbox) throw notFound('Mailbox');
+      const domain = (task.config as { domain?: string }).domain;
+      if (mailbox.accountDomain && domain !== mailbox.accountDomain)
+        throw new AppError(
+          'ACCOUNT_DOMAIN_MISMATCH',
+          'Task domain differs from the configured account domain. Update the task before starting.',
+          422,
+        );
+      const attempt = task.attemptCount + 1;
+      const run = await tx.taskRun.create({
+        data: {
+          taskId: id,
+          attempt,
+          checkpoint:
+            action === 'resume' && previous?.checkpoint ? json(previous.checkpoint) : undefined,
+          outcome: action === 'resume' && previous ? previous.outcome : 'NOT_CREATED',
+        },
+      });
+      await tx.outboxEvent.create({ data: { runId: run.id } });
+      const updated = await tx.task.update({
+        where: { id },
+        data: {
+          currentRunId: run.id,
+          attemptCount: attempt,
+          desiredState: 'running',
+          status: 'QUEUED',
+          version: { increment: 1 },
+        },
+      });
+      await audit(tx, `task.${action}`, id, { runId: run.id });
+      return { ...updated, runId: run.id };
+    });
+  }
+  private version(task: Task, expected: number) {
+    if (task.version !== expected)
+      throw conflict('Task changed. Refresh its version before sending another command.');
+  }
+}

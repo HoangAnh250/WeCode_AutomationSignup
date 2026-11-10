@@ -1,0 +1,27 @@
+node_modules/
+dist/
+.env
+.env.*
+!.env.example
+playwright-report/
+test-results/
+*.tsbuildinfo
+
+release/
+
+processes/backend/.runtime/
+
+# Local credentials, captured traffic, exported accounts and browser state
+*.har
+*.log
+*.pem
+*.key
+*.pfx
+*.p12
+backend-connection.json
+desktop-settings.json
+storage-state*.json
+storageState*.json
+accounts-*.csv
+accounts-*.xlsx
+wecode-accounts*.csv

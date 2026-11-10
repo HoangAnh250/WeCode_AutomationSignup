@@ -1,0 +1,60 @@
+{
+  "name": "wecode",
+  "private": true,
+  "version": "0.1.3",
+  "type": "module",
+  "workspaces": [
+    "apps/desktop/renderer",
+    "processes/backend"
+  ],
+  "scripts": {
+    "dev": "node scripts/dev-desktop.mjs",
+    "build": "npm run build:renderer && npm run build:electron",
+    "typecheck": "npm run typecheck --workspace @wecode/renderer && npm run typecheck:electron",
+    "test": "npm run test --workspace @wecode/renderer",
+    "preview": "npm run preview --workspace @wecode/renderer",
+    "format": "npm run format --workspace @wecode/renderer",
+    "format:check": "npm run format:check --workspace @wecode/renderer",
+    "backend:dev": "npm run dev --workspace @wecode/backend",
+    "backend:build": "npm run build --workspace @wecode/backend",
+    "backend:start": "npm run start --workspace @wecode/backend",
+    "backend:worker": "npm run worker --workspace @wecode/backend",
+    "backend:test": "npm run test --workspace @wecode/backend",
+    "backend:typecheck": "npm run typecheck --workspace @wecode/backend",
+    "db:generate": "npm run db:generate --workspace @wecode/backend",
+    "db:migrate": "npm run db:migrate --workspace @wecode/backend",
+    "dev:web": "npm run dev --workspace @wecode/renderer",
+    "build:renderer": "npm run build --workspace @wecode/renderer",
+    "build:electron": "npm run typecheck:electron && node scripts/build-electron.mjs",
+    "typecheck:electron": "tsc -p apps/desktop/tsconfig.json",
+    "dist": "npm run build && electron-builder --config electron-builder.yml --win --x64",
+    "dist:dir": "npm run build && electron-builder --config electron-builder.yml --win --x64 --dir",
+    "start": "electron .",
+    "icon:generate": "powershell.exe -NoProfile -File scripts/generate-icon.ps1",
+    "test:desktop": "node scripts/test-desktop-unit.mjs",
+    "test:electron": "npm run build && node scripts/smoke-electron.mjs",
+    "desktop:local": "node scripts/start-local.mjs"
+  },
+  "engines": {
+    "node": ">=22.12"
+  },
+  "overrides": {
+    "uuid": "$uuid",
+    "minimatch@>=7 <11.0.1": "11.0.5"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "csv-parse": "^7.0.3",
+    "dotenv": "^17.2.3",
+    "electron": "^45.2.3",
+    "electron-builder": "^26.18.0",
+    "esbuild": "^0.28.2",
+    "typescript": "^5.9.3",
+    "uuid": "^11.1.1",
+    "zod": "^4.6.7"
+  },
+  "description": "WeCode desktop automation platform",
+  "author": "WeCode",
+  "main": "apps/desktop/dist/main.cjs",
+  "license": "UNLICENSED"
+}

@@ -1,0 +1,2850 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "WeCode Desktop Backend",
+    "version": "0.1.0",
+    "description": "Loopback internal service, called by Electron main/preload adapters. No Playwright implementation. All private routes require a service token and reject browser Origin headers."
+  },
+  "servers": [
+    {
+      "url": "http://127.0.0.1:4317"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "desktopToken": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    },
+    "schemas": {
+      "ProfileCreate": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "mode": {
+            "default": "isolated",
+            "type": "string",
+            "enum": [
+              "isolated",
+              "persistent"
+            ]
+          },
+          "proxyId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "additionalProperties": false
+      },
+      "ProfileProxy": {
+        "type": "object",
+        "properties": {
+          "proxyId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "proxyId"
+        ],
+        "additionalProperties": false
+      },
+      "TaskCreate": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "config": {
+            "type": "object",
+            "properties": {
+              "domain": {
+                "type": "string",
+                "maxLength": 253,
+                "pattern": "^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z]{2,63}$"
+              },
+              "pattern": {
+                "default": "[random][digits]",
+                "type": "string",
+                "enum": [
+                  "[random][digits]",
+                  "[firstName][digits]",
+                  "[word][digits]"
+                ]
+              },
+              "count": {
+                "default": 1,
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 10000
+              },
+              "password": {
+                "default": {
+                  "length": 20,
+                  "uppercase": true,
+                  "lowercase": true,
+                  "numbers": true,
+                  "special": true
+                },
+                "type": "object",
+                "properties": {
+                  "length": {
+                    "default": 20,
+                    "type": "integer",
+                    "minimum": 12,
+                    "maximum": 128
+                  },
+                  "uppercase": {
+                    "default": true,
+                    "type": "boolean"
+                  },
+                  "lowercase": {
+                    "default": true,
+                    "type": "boolean"
+                  },
+                  "numbers": {
+                    "default": true,
+                    "type": "boolean"
+                  },
+                  "special": {
+                    "default": true,
+                    "type": "boolean"
+                  }
+                },
+                "additionalProperties": false
+              },
+              "proxyId": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "browser": {
+                "type": "object",
+                "properties": {
+                  "profileId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  },
+                  "profileMode": {
+                    "default": "isolated",
+                    "type": "string",
+                    "enum": [
+                      "isolated",
+                      "persistent"
+                    ]
+                  },
+                  "proxyMode": {
+                    "default": "direct",
+                    "type": "string",
+                    "enum": [
+                      "direct",
+                      "auto",
+                      "fixed"
+                    ]
+                  },
+                  "rotateOnFailure": {
+                    "default": false,
+                    "type": "boolean"
+                  },
+                  "sessionId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  }
+                },
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "domain"
+            ],
+            "additionalProperties": false
+          },
+          "emailConfigId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          }
+        },
+        "required": [
+          "name",
+          "config"
+        ],
+        "additionalProperties": false
+      },
+      "TaskUpdate": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "config": {
+            "type": "object",
+            "properties": {
+              "domain": {
+                "type": "string",
+                "maxLength": 253,
+                "pattern": "^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z]{2,63}$"
+              },
+              "pattern": {
+                "default": "[random][digits]",
+                "type": "string",
+                "enum": [
+                  "[random][digits]",
+                  "[firstName][digits]",
+                  "[word][digits]"
+                ]
+              },
+              "count": {
+                "default": 1,
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 10000
+              },
+              "password": {
+                "default": {
+                  "length": 20,
+                  "uppercase": true,
+                  "lowercase": true,
+                  "numbers": true,
+                  "special": true
+                },
+                "type": "object",
+                "properties": {
+                  "length": {
+                    "default": 20,
+                    "type": "integer",
+                    "minimum": 12,
+                    "maximum": 128
+                  },
+                  "uppercase": {
+                    "default": true,
+                    "type": "boolean"
+                  },
+                  "lowercase": {
+                    "default": true,
+                    "type": "boolean"
+                  },
+                  "numbers": {
+                    "default": true,
+                    "type": "boolean"
+                  },
+                  "special": {
+                    "default": true,
+                    "type": "boolean"
+                  }
+                },
+                "additionalProperties": false
+              },
+              "proxyId": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "browser": {
+                "type": "object",
+                "properties": {
+                  "profileId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  },
+                  "profileMode": {
+                    "default": "isolated",
+                    "type": "string",
+                    "enum": [
+                      "isolated",
+                      "persistent"
+                    ]
+                  },
+                  "proxyMode": {
+                    "default": "direct",
+                    "type": "string",
+                    "enum": [
+                      "direct",
+                      "auto",
+                      "fixed"
+                    ]
+                  },
+                  "rotateOnFailure": {
+                    "default": false,
+                    "type": "boolean"
+                  },
+                  "sessionId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  }
+                },
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "domain"
+            ],
+            "additionalProperties": false
+          },
+          "emailConfigId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "version": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "name",
+          "config",
+          "version"
+        ],
+        "additionalProperties": false
+      },
+      "Command": {
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "version"
+        ],
+        "additionalProperties": false
+      },
+      "AccountCreate": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "maxLength": 254,
+            "format": "email",
+            "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+          },
+          "username": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "password": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "proxyUsed": {
+            "type": "string",
+            "maxLength": 512
+          },
+          "status": {
+            "default": "created",
+            "type": "string",
+            "enum": [
+              "created",
+              "verified",
+              "disabled"
+            ]
+          },
+          "taskRunId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          }
+        },
+        "required": [
+          "email",
+          "username",
+          "password"
+        ],
+        "additionalProperties": false
+      },
+      "ProxyImport": {
+        "type": "object",
+        "properties": {
+          "format": {
+            "type": "string",
+            "enum": [
+              "json",
+              "txt",
+              "csv"
+            ]
+          },
+          "content": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000000
+          },
+          "dryRun": {
+            "default": false,
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "format",
+          "content"
+        ],
+        "additionalProperties": false
+      },
+      "EmailConfig": {
+        "type": "object",
+        "properties": {
+          "inboxAddress": {
+            "type": "string",
+            "maxLength": 254,
+            "format": "email",
+            "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+          },
+          "accountDomain": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 253,
+                "pattern": "^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z]{2,63}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "mailbox": {
+            "default": "INBOX",
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "pattern": "^[^\\x00-\\x1f\\x7f]+$"
+          },
+          "appPassword": {
+            "type": "string",
+            "minLength": 8,
+            "maxLength": 512
+          },
+          "host": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 253,
+            "pattern": "^[a-zA-Z0-9.-]+$"
+          },
+          "port": {
+            "default": 993,
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 65535
+          }
+        },
+        "required": [
+          "inboxAddress",
+          "appPassword",
+          "host"
+        ],
+        "additionalProperties": false
+      },
+      "EmailUpdate": {
+        "type": "object",
+        "properties": {
+          "inboxAddress": {
+            "type": "string",
+            "maxLength": 254,
+            "format": "email",
+            "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+          },
+          "accountDomain": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 253,
+                "pattern": "^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z]{2,63}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "mailbox": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "pattern": "^[^\\x00-\\x1f\\x7f]+$"
+          },
+          "appPassword": {
+            "type": "string",
+            "minLength": 8,
+            "maxLength": 512
+          },
+          "host": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 253,
+            "pattern": "^[a-zA-Z0-9.-]+$"
+          },
+          "port": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 65535
+          },
+          "version": {
+            "type": "integer",
+            "exclusiveMinimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "required": [
+          "version"
+        ],
+        "additionalProperties": false
+      },
+      "Verification": {
+        "type": "object",
+        "properties": {
+          "recipient": {
+            "type": "string",
+            "maxLength": 254,
+            "format": "email",
+            "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+          },
+          "sender": {
+            "type": "string",
+            "maxLength": 254,
+            "format": "email",
+            "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+          },
+          "ttlSeconds": {
+            "default": 300,
+            "type": "integer",
+            "minimum": 30,
+            "maximum": 900
+          }
+        },
+        "required": [
+          "recipient",
+          "sender"
+        ],
+        "additionalProperties": false
+      },
+      "Identity": {
+        "type": "object",
+        "properties": {
+          "domain": {
+            "type": "string",
+            "maxLength": 253,
+            "pattern": "^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z]{2,63}$"
+          },
+          "pattern": {
+            "default": "[random][digits]",
+            "type": "string",
+            "enum": [
+              "[random][digits]",
+              "[firstName][digits]",
+              "[word][digits]"
+            ]
+          },
+          "randomLength": {
+            "default": 8,
+            "type": "integer",
+            "minimum": 3,
+            "maximum": 20
+          },
+          "digits": {
+            "default": 4,
+            "type": "integer",
+            "minimum": 2,
+            "maximum": 10
+          },
+          "password": {
+            "default": {
+              "length": 20,
+              "uppercase": true,
+              "lowercase": true,
+              "numbers": true,
+              "special": true
+            },
+            "type": "object",
+            "properties": {
+              "length": {
+                "default": 20,
+                "type": "integer",
+                "minimum": 12,
+                "maximum": 128
+              },
+              "uppercase": {
+                "default": true,
+                "type": "boolean"
+              },
+              "lowercase": {
+                "default": true,
+                "type": "boolean"
+              },
+              "numbers": {
+                "default": true,
+                "type": "boolean"
+              },
+              "special": {
+                "default": true,
+                "type": "boolean"
+              }
+            },
+            "additionalProperties": false
+          },
+          "count": {
+            "default": 1,
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          }
+        },
+        "required": [
+          "domain"
+        ],
+        "additionalProperties": false
+      },
+      "Session": {
+        "type": "object",
+        "properties": {
+          "accountId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "payload": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {}
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+          }
+        },
+        "required": [
+          "accountId",
+          "payload",
+          "expiresAt"
+        ],
+        "additionalProperties": false
+      },
+      "ProxyEnabled": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "enabled"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "paths": {
+    "/health/live": {
+      "get": {
+        "summary": "Process liveness",
+        "security": [],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Operation completed."
+          },
+          "401": {
+            "description": "Missing or invalid service token."
+          },
+          "403": {
+            "description": "Browser-origin request rejected."
+          },
+          "409": {
+            "description": "Version conflict, duplicate identity, or unsafe transition."
+          },
+          "422": {
+            "description": "Input validation failed; fields returned without input values."
+          },
+          "500": {
+            "description": "Sanitized internal error."
+          },
+          "502": {
+            "description": "Mailbox or network dependency unavailable."
+          }
+        }
+      }
+    },
+    "/health/ready": {
+      "get": {
+        "summary": "PostgreSQL and queue readiness",
+        "security": [
+          {
+            "desktopToken": []
+          }
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Operation completed."
+          },
+          "401": {
+            "description": "Missing or invalid service token."
+          },
+          "403": {
+            "description": "Browser-origin request rejected."
+          },
+          "409": {
+            "description": "Version conflict, duplicate identity, or unsafe transition."
+          },
+          "422": {
+            "description": "Input validation failed; fields returned without input values."
+          },
+          "500": {
+            "description": "Sanitized internal error."
+          },
+          "502": {
+            "description": "Mailbox or network dependency unavailable."
+          }
+        }
+      }
+    },
+    "/api/v1/browser-profiles": {
+      "get": {
+        "summary": "List local profile metadata; no browser storage or secrets",
+        "security": [
+          {
+            "desktopToken": []
+          }
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Operation completed."
+          },
+          "401": {
+            "description": "Missing or invalid service token."
+          },
+          "403": {
+            "description": "Browser-origin request rejected."
+          },
+          "409": {
+            "description": "Version conflict, duplicate identity, or unsafe transition."
+          },
+          "422": {
+            "description": "Input validation failed; fields returned without input values."
+          },
+          "500": {
+            "description": "Sanitized internal error."
+          },
+          "502": {
+            "description": "Mailbox or network dependency unavailable."
+          }
+        }
+      },
+      "post": {
+        "summary": "Create isolated or persistent local browser profile",
+        "security": [
+          {
+            "desktopToken": []
+          }
+        ],
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProfileCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Operation completed."
+          },
+          "401": {
+            "description": "Missing or invalid service token."
+          },
+          "403": {
+            "description": "Browser-origin request rejected."
+          },
+          "409": {
+            "description": "Version conflict, duplicate identity, or unsafe transition."
+          },
+          "422": {
+            "description": "Input validation failed; fields returned without input values."
+          },
+          "500": {
+            "description": "Sanitized internal error."
+          },
+          "502": {
+            "description": "Mailbox or network dependency unavailable."
+          }
+        }
+      }
+    },
+    "/api/v1/browser-profiles/{id}": {
+      "delete": {
+        "summary": "Soft-delete an idle local profile",
+        "security": [
+          {
+            "desktopToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Operation completed."
+          },
+          "401": {
+            "description": "Missing or invalid service token."
+          },
+          "403": {
+            "description": "Browser-origin request rejected."
+          },
+          "409": {
+            "description": "Version conflict, duplicate identity, or unsafe transition."
+          },
+          "422": {
+            "description": "Input validation failed; fields returned without input values."
+          },
+          "500": {
+            "description": "Sanitized internal error."
+          },
+          "502": {
+            "description": "Mailbox or network dependency unavailable."
+          }
+        }
+      }
+    },
+    "/api/v1/browser-profiles/{id}/proxy": {
+      "patch": {
+        "summary": "Assign a proxy to an idle local profile",
+        "security": [
+          {
+            "desktopToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProfileProxy"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Operation completed."
+          },
+          "401": {
+            "description": "Missing or invalid service token."
+          },
+          "403": {
+            "description": "Browser-origin request rejected."
+          },
+          "409": {
+            "description": "Version conflict, duplicate identity, or unsafe transition."
+          },
+          "422": {
+            "description": "Input validation failed; fields returned without input values."
+          },
+          "500": {
+            "description": "Sanitized internal error."
+          },
+          "502": {
+            "description": "Mailbox or network dependency unavailable."
+          }
+        }
+      }
+    },
+    "/api/v1/tasks": {
+      "get": {
+        "summary": "List account-creation tasks",
+        "security": [
+          {
+            "desktopToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 25,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          },
+          {
+            "in": "query",
+            "name": "search",
+            "required": false,
+            "schema": {
+              "default": "",
+              "type": "string",
+              "maxLength": 200
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed."
+          },
+          "401": {
+            "description": "Missing or invalid service token."
+          },
+          "403": {
+            "description": "Browser-origin request rejected."
+          },
+          "409": {
+            "description": "Version conflict, duplicate identity, or unsafe transition."
+          },
+          "422": {
+            "description": "Input validation failed; fields returned without input values."
+          },
+          "500": {
+            "description": "Sanitized internal error."
+          },
+          "502": {
+            "description": "Mailbox or network dependency unavailable."
+          }
+        }
+      },
+      "post": {
+        "summary": "Create a draft task",
+        "security": [
+          {
+            "desktopToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 128
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TaskCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Operation completed."
+          },
+          "401": {
+            "description": "Missing or invalid service token."
+          },
+          "403": {
+            "description": "Browser-origin request rejected."
+          },
+          "409": {
+            "description": "Version conflict, duplicate identity, or unsafe transition."
+          },
+          "422": {
+            "description": "Input validation failed; fields returned without input values."
+          },
+          "500": {
+            "description": "Sanitized internal error."
+          },
+          "502": {
+            "description": "Mailbox or network dependency unavailable."
+          }
+        }
+      }
+    },
+    "/api/v1/tasks/{id}": {
+      "get": {
+        "summary": "Get task and latest 20 runs",
+        "security": [
+          {
+            "desktopToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed."
+          },
+          "401": {
+            "description": "Missing or invalid service token."
+          },
+          "403": {
+            "description": "Browser-origin request rejected."
+          },
+          "409": {
+            "description": "Version conflict, duplicate identity, or unsafe transition."
+          },
+          "422": {
+            "description": "Input validation failed; fields returned without input values."
+          },
+          "500": {
+            "description": "Sanitized internal error."
+          },
+          "502": {
+            "description": "Mailbox or network dependency unavailable."
+          }
+        }
+      },
+      "patch": {
+        "summary": "Update editable task with expected version",
+        "security": [
+          {
+            "desktopToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TaskUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Operation completed."
+          },
+          "401": {
+            "description": "Missing or invalid service token."
+          },
+          "403": {
+            "description": "Browser-origin request rejected."
+          },
+          "409": {
+            "description": "Version conflict, duplicate identity, or unsafe transition."
+          },
+          "422": {
+            "description": "Input validation failed; fields returned without input values."
+          },
+          "500": {
+            "description": "Sanitized internal error."
+          },
+          "502": {
+            "description": "Mailbox or network dependency unavailable."
+          }
+        }
+      },
+      "delete": {
+        "summary": "Soft-delete an idle task",
+        "security": [
+          {
+            "desktopToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Command"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Operation completed."
+          },
+          "401": {
+            "description": "Missing or invalid service token."
+          },
+          "403": {
+            "description": "Browser-origin request rejected."
+          },
+          "409": {
+            "description": "Version conflict, duplicate identity, or unsafe transition."
+          },
+          "422": {
+            "description": "Input validation failed; fields returned without input values."
+          },
+          "500": {
+            "description": "Sanitized internal error."
+          },
+          "502": {
+            "description": "Mailbox or network dependency unavailable."
+          }
+        }
+      }
+    },
+    "/api/v1/tasks/{id}/start": {
+      "post": {
+        "summary": "start task; inspect returned actual state",
+        "security": [
+          {
+            "desktopToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Command"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Operation completed."
+          },
+          "401": {
+            "description": "Missing or invalid service token."
+          },
+          "403": {
+            "description": "Browser-origin request rejected."
+          },
+          "409": {
+            "description": "Version conflict, duplicate identity, or unsafe transition."
+          },
+          "422": {
+            "description": "Input validation failed; fields returned without input values."
+          },
+          "500": {
+            "description": "Sanitized internal error."
+          },
+          "502": {
+            "description": "Mailbox or network dependency unavailable."
+          }
+        }
+      }
+    },
+    "/api/v1/tasks/{id}/pause": {
+      "post": {
+        "summary": "pause task; inspect returned actual state",
+        "security": [
+          {
+            "desktopToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Command"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Operation completed."
+          },
+          "401": {
+            "description": "Missing or invalid service token."
+          },
+          "403": {
+            "description": "Browser-origin request rejected."
+          },
+          "409": {
+            "description": "Version conflict, duplicate identity, or unsafe transition."
+          },
+          "422": {
+            "description": "Input validation failed; fields returned without input values."
+          },
+          "500": {
+            "description": "Sanitized internal error."
+          },
+          "502": {
+            "description": "Mailbox or network dependency unavailable."
+          }
+        }
+      }
+    },
+    "/api/v1/tasks/{id}/resume": {
+      "post": {
+        "summary": "resume task; inspect returned actual state",
+        "security": [
+          {
+            "desktopToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Command"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Operation completed."
+          },
+          "401": {
+            "description": "Missing or invalid service token."
+          },
+          "403": {
+            "description": "Browser-origin request rejected."
+          },
+          "409": {
+            "description": "Version conflict, duplicate identity, or unsafe transition."
+          },
+          "422": {
+            "description": "Input validation failed; fields returned without input values."
+          },
+          "500": {
+            "description": "Sanitized internal error."
+          },
+          "502": {
+            "description": "Mailbox or network dependency unavailable."
+          }
+        }
+      }
+    },
+    "/api/v1/tasks/{id}/retry": {
+      "post": {
+        "summary": "retry task; inspect returned actual state",
+        "security": [
+          {
+            "desktopToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Command"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Operation completed."
+          },
+          "401": {
+            "description": "Missing or invalid service token."
+          },
+          "403": {
+            "description": "Browser-origin request rejected."
+          },
+          "409": {
+            "description": "Version conflict, duplicate identity, or unsafe transition."
+          },
+          "422": {
+            "description": "Input validation failed; fields returned without input values."
+          },
+          "500": {
+            "description": "Sanitized internal error."
+          },
+          "502": {
+            "description": "Mailbox or network dependency unavailable."
+          }
+        }
+      }
+    },
+    "/api/v1/task-runs/{id}": {
+      "get": {
+        "summary": "Read one execution and its checkpoint/outcome",
+        "security": [
+          {
+            "desktopToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed."
+          },
+          "401": {
+            "description": "Missing or invalid service token."
+          },
+          "403": {
+            "description": "Browser-origin request rejected."
+          },
+          "409": {
+            "description": "Version conflict, duplicate identity, or unsafe transition."
+          },
+          "422": {
+            "description": "Input validation failed; fields returned without input values."
+          },
+          "500": {
+            "description": "Sanitized internal error."
+          },
+          "502": {
+            "description": "Mailbox or network dependency unavailable."
+          }
+        }
+      }
+    },
+    "/api/v1/accounts": {
+      "get": {
+        "summary": "Search/filter/paginate account metadata; no passwords",
+        "security": [
+          {
+            "desktopToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 25,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          },
+          {
+            "in": "query",
+            "name": "search",
+            "required": false,
+            "schema": {
+              "default": "",
+              "type": "string",
+              "maxLength": 200
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "created",
+                "verified",
+                "disabled"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "taskRunId",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed."
+          },
+          "401": {
+            "description": "Missing or invalid service token."
+          },
+          "403": {
+            "description": "Browser-origin request rejected."
+          },
+          "409": {
+            "description": "Version conflict, duplicate identity, or unsafe transition."
+          },
+          "422": {
+            "description": "Input validation failed; fields returned without input values."
+          },
+          "500": {
+            "description": "Sanitized internal error."
+          },
+          "502": {
+            "description": "Mailbox or network dependency unavailable."
+          }
+        }
+      },
+      "post": {
+        "summary": "Store an externally created account result",
+        "security": [
+          {
+            "desktopToken": []
+          }
+        ],
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccountCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Operation completed."
+          },
+          "401": {
+            "description": "Missing or invalid service token."
+          },
+          "403": {
+            "description": "Browser-origin request rejected."
+          },
+          "409": {
+            "description": "Version conflict, duplicate identity, or unsafe transition."
+          },
+          "422": {
+            "description": "Input validation failed; fields returned without input values."
+          },
+          "500": {
+            "description": "Sanitized internal error."
+          },
+          "502": {
+            "description": "Mailbox or network dependency unavailable."
+          }
+        }
+      }
+    },
+    "/api/v1/accounts/{id}": {
+      "get": {
+        "summary": "Read account metadata",
+        "security": [
+          {
+            "desktopToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed."
+          },
+          "401": {
+            "description": "Missing or invalid service token."
+          },
+          "403": {
+            "description": "Browser-origin request rejected."
+          },
+          "409": {
+            "description": "Version conflict, duplicate identity, or unsafe transition."
+          },
+          "422": {
+            "description": "Input validation failed; fields returned without input values."
+          },
+          "500": {
+            "description": "Sanitized internal error."
+          },
+          "502": {
+            "description": "Mailbox or network dependency unavailable."
+          }
+        }
+      }
+    },
+    "/api/v1/accounts/{id}/password": {
+      "get": {
+        "summary": "Explicitly reveal and audit one password",
+        "security": [
+          {
+            "desktopToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sensitive response; Cache-Control: no-store."
+          },
+          "401": {
+            "description": "Missing or invalid service token."
+          },
+          "403": {
+            "description": "Browser-origin request rejected."
+          },
+          "409": {
+            "description": "Version conflict, duplicate identity, or unsafe transition."
+          },
+          "422": {
+            "description": "Input validation failed; fields returned without input values."
+          },
+          "500": {
+            "description": "Sanitized internal error."
+          },
+          "502": {
+            "description": "Mailbox or network dependency unavailable."
+          }
+        }
+      }
+    },
+    "/api/v1/exports/accounts": {
+      "get": {
+        "summary": "Stream matching accounts; masked passwords by default",
+        "security": [
+          {
+            "desktopToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 25,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          },
+          {
+            "in": "query",
+            "name": "search",
+            "required": false,
+            "schema": {
+              "default": "",
+              "type": "string",
+              "maxLength": 200
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "created",
+                "verified",
+                "disabled"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "taskRunId",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          },
+          {
+            "in": "query",
+            "name": "format",
+            "required": false,
+            "schema": {
+              "default": "csv",
+              "type": "string",
+              "enum": [
+                "csv",
+                "xlsx"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "includePasswords",
+            "required": false,
+            "schema": {
+              "default": "false",
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "CSV or XLSX attachment.",
+            "content": {
+              "text/csv": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid service token."
+          },
+          "403": {
+            "description": "Browser-origin request rejected."
+          },
+          "409": {
+            "description": "Version conflict, duplicate identity, or unsafe transition."
+          },
+          "422": {
+            "description": "Input validation failed; fields returned without input values."
+          },
+          "500": {
+            "description": "Sanitized internal error."
+          },
+          "502": {
+            "description": "Mailbox or network dependency unavailable."
+          }
+        }
+      }
+    },
+    "/api/v1/proxies": {
+      "get": {
+        "summary": "List proxy metadata",
+        "security": [
+          {
+            "desktopToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 25,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          },
+          {
+            "in": "query",
+            "name": "search",
+            "required": false,
+            "schema": {
+              "default": "",
+              "type": "string",
+              "maxLength": 200
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed."
+          },
+          "401": {
+            "description": "Missing or invalid service token."
+          },
+          "403": {
+            "description": "Browser-origin request rejected."
+          },
+          "409": {
+            "description": "Version conflict, duplicate identity, or unsafe transition."
+          },
+          "422": {
+            "description": "Input validation failed; fields returned without input values."
+          },
+          "500": {
+            "description": "Sanitized internal error."
+          },
+          "502": {
+            "description": "Mailbox or network dependency unavailable."
+          }
+        }
+      }
+    },
+    "/api/v1/proxies/import": {
+      "post": {
+        "summary": "Validate/import JSON, TXT or headered CSV",
+        "security": [
+          {
+            "desktopToken": []
+          }
+        ],
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProxyImport"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Operation completed."
+          },
+          "401": {
+            "description": "Missing or invalid service token."
+          },
+          "403": {
+            "description": "Browser-origin request rejected."
+          },
+          "409": {
+            "description": "Version conflict, duplicate identity, or unsafe transition."
+          },
+          "422": {
+            "description": "Input validation failed; fields returned without input values."
+          },
+          "500": {
+            "description": "Sanitized internal error."
+          },
+          "502": {
+            "description": "Mailbox or network dependency unavailable."
+          }
+        }
+      }
+    },
+    "/api/v1/proxies/rotate": {
+      "post": {
+        "summary": "Select next enabled healthy proxy and increment assignment statistics",
+        "security": [
+          {
+            "desktopToken": []
+          }
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Operation completed."
+          },
+          "401": {
+            "description": "Missing or invalid service token."
+          },
+          "403": {
+            "description": "Browser-origin request rejected."
+          },
+          "409": {
+            "description": "Version conflict, duplicate identity, or unsafe transition."
+          },
+          "422": {
+            "description": "Input validation failed; fields returned without input values."
+          },
+          "500": {
+            "description": "Sanitized internal error."
+          },
+          "502": {
+            "description": "Mailbox or network dependency unavailable."
+          }
+        }
+      }
+    },
+    "/api/v1/proxies/statistics": {
+      "get": {
+        "summary": "Pool usage statistics",
+        "security": [
+          {
+            "desktopToken": []
+          }
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Operation completed."
+          },
+          "401": {
+            "description": "Missing or invalid service token."
+          },
+          "403": {
+            "description": "Browser-origin request rejected."
+          },
+          "409": {
+            "description": "Version conflict, duplicate identity, or unsafe transition."
+          },
+          "422": {
+            "description": "Input validation failed; fields returned without input values."
+          },
+          "500": {
+            "description": "Sanitized internal error."
+          },
+          "502": {
+            "description": "Mailbox or network dependency unavailable."
+          }
+        }
+      }
+    },
+    "/api/v1/proxies/{id}/check": {
+      "post": {
+        "summary": "Probe configured HTTP(S) target through proxy",
+        "security": [
+          {
+            "desktopToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed."
+          },
+          "401": {
+            "description": "Missing or invalid service token."
+          },
+          "403": {
+            "description": "Browser-origin request rejected."
+          },
+          "409": {
+            "description": "Version conflict, duplicate identity, or unsafe transition."
+          },
+          "422": {
+            "description": "Input validation failed; fields returned without input values."
+          },
+          "500": {
+            "description": "Sanitized internal error."
+          },
+          "502": {
+            "description": "Mailbox or network dependency unavailable."
+          }
+        }
+      }
+    },
+    "/api/v1/proxies/{id}/health": {
+      "get": {
+        "summary": "Latest 100 health checks",
+        "security": [
+          {
+            "desktopToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed."
+          },
+          "401": {
+            "description": "Missing or invalid service token."
+          },
+          "403": {
+            "description": "Browser-origin request rejected."
+          },
+          "409": {
+            "description": "Version conflict, duplicate identity, or unsafe transition."
+          },
+          "422": {
+            "description": "Input validation failed; fields returned without input values."
+          },
+          "500": {
+            "description": "Sanitized internal error."
+          },
+          "502": {
+            "description": "Mailbox or network dependency unavailable."
+          }
+        }
+      }
+    },
+    "/api/v1/proxies/{id}": {
+      "patch": {
+        "summary": "Enable or disable proxy",
+        "security": [
+          {
+            "desktopToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProxyEnabled"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Operation completed."
+          },
+          "401": {
+            "description": "Missing or invalid service token."
+          },
+          "403": {
+            "description": "Browser-origin request rejected."
+          },
+          "409": {
+            "description": "Version conflict, duplicate identity, or unsafe transition."
+          },
+          "422": {
+            "description": "Input validation failed; fields returned without input values."
+          },
+          "500": {
+            "description": "Sanitized internal error."
+          },
+          "502": {
+            "description": "Mailbox or network dependency unavailable."
+          }
+        }
+      }
+    },
+    "/api/v1/email-configs": {
+      "get": {
+        "summary": "List mailbox metadata",
+        "security": [
+          {
+            "desktopToken": []
+          }
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Operation completed."
+          },
+          "401": {
+            "description": "Missing or invalid service token."
+          },
+          "403": {
+            "description": "Browser-origin request rejected."
+          },
+          "409": {
+            "description": "Version conflict, duplicate identity, or unsafe transition."
+          },
+          "422": {
+            "description": "Input validation failed; fields returned without input values."
+          },
+          "500": {
+            "description": "Sanitized internal error."
+          },
+          "502": {
+            "description": "Mailbox or network dependency unavailable."
+          }
+        }
+      },
+      "post": {
+        "summary": "Create encrypted TLS IMAP configuration",
+        "security": [
+          {
+            "desktopToken": []
+          }
+        ],
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmailConfig"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Operation completed."
+          },
+          "401": {
+            "description": "Missing or invalid service token."
+          },
+          "403": {
+            "description": "Browser-origin request rejected."
+          },
+          "409": {
+            "description": "Version conflict, duplicate identity, or unsafe transition."
+          },
+          "422": {
+            "description": "Input validation failed; fields returned without input values."
+          },
+          "500": {
+            "description": "Sanitized internal error."
+          },
+          "502": {
+            "description": "Mailbox or network dependency unavailable."
+          }
+        }
+      }
+    },
+    "/api/v1/email-configs/{id}/verifications": {
+      "get": {
+        "summary": "List verification metadata for the selected OTP inbox; no codes",
+        "security": [
+          {
+            "desktopToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed."
+          },
+          "401": {
+            "description": "Missing or invalid service token."
+          },
+          "403": {
+            "description": "Browser-origin request rejected."
+          },
+          "409": {
+            "description": "Version conflict, duplicate identity, or unsafe transition."
+          },
+          "422": {
+            "description": "Input validation failed; fields returned without input values."
+          },
+          "500": {
+            "description": "Sanitized internal error."
+          },
+          "502": {
+            "description": "Mailbox or network dependency unavailable."
+          }
+        }
+      },
+      "post": {
+        "summary": "Create recipient/sender-correlated verification request",
+        "security": [
+          {
+            "desktopToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Verification"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Operation completed."
+          },
+          "401": {
+            "description": "Missing or invalid service token."
+          },
+          "403": {
+            "description": "Browser-origin request rejected."
+          },
+          "409": {
+            "description": "Version conflict, duplicate identity, or unsafe transition."
+          },
+          "422": {
+            "description": "Input validation failed; fields returned without input values."
+          },
+          "500": {
+            "description": "Sanitized internal error."
+          },
+          "502": {
+            "description": "Mailbox or network dependency unavailable."
+          }
+        }
+      }
+    },
+    "/api/v1/email-configs/{id}": {
+      "patch": {
+        "summary": "Update mailbox with expected version",
+        "security": [
+          {
+            "desktopToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmailUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Operation completed."
+          },
+          "401": {
+            "description": "Missing or invalid service token."
+          },
+          "403": {
+            "description": "Browser-origin request rejected."
+          },
+          "409": {
+            "description": "Version conflict, duplicate identity, or unsafe transition."
+          },
+          "422": {
+            "description": "Input validation failed; fields returned without input values."
+          },
+          "500": {
+            "description": "Sanitized internal error."
+          },
+          "502": {
+            "description": "Mailbox or network dependency unavailable."
+          }
+        }
+      }
+    },
+    "/api/v1/email-configs/{id}/test": {
+      "post": {
+        "summary": "Test authenticated TLS IMAP connection",
+        "security": [
+          {
+            "desktopToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed."
+          },
+          "401": {
+            "description": "Missing or invalid service token."
+          },
+          "403": {
+            "description": "Browser-origin request rejected."
+          },
+          "409": {
+            "description": "Version conflict, duplicate identity, or unsafe transition."
+          },
+          "422": {
+            "description": "Input validation failed; fields returned without input values."
+          },
+          "500": {
+            "description": "Sanitized internal error."
+          },
+          "502": {
+            "description": "Mailbox or network dependency unavailable."
+          }
+        }
+      }
+    },
+    "/api/v1/verifications/{id}": {
+      "get": {
+        "summary": "Read verification state, never auto-marked verified",
+        "security": [
+          {
+            "desktopToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed."
+          },
+          "401": {
+            "description": "Missing or invalid service token."
+          },
+          "403": {
+            "description": "Browser-origin request rejected."
+          },
+          "409": {
+            "description": "Version conflict, duplicate identity, or unsafe transition."
+          },
+          "422": {
+            "description": "Input validation failed; fields returned without input values."
+          },
+          "500": {
+            "description": "Sanitized internal error."
+          },
+          "502": {
+            "description": "Mailbox or network dependency unavailable."
+          }
+        }
+      }
+    },
+    "/api/v1/verifications/{id}/scan": {
+      "post": {
+        "summary": "Scan at most 100 recent bounded messages",
+        "security": [
+          {
+            "desktopToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed."
+          },
+          "401": {
+            "description": "Missing or invalid service token."
+          },
+          "403": {
+            "description": "Browser-origin request rejected."
+          },
+          "409": {
+            "description": "Version conflict, duplicate identity, or unsafe transition."
+          },
+          "422": {
+            "description": "Input validation failed; fields returned without input values."
+          },
+          "500": {
+            "description": "Sanitized internal error."
+          },
+          "502": {
+            "description": "Mailbox or network dependency unavailable."
+          }
+        }
+      }
+    },
+    "/api/v1/verifications/{id}/code": {
+      "get": {
+        "summary": "Read detected, unexpired code with audit",
+        "security": [
+          {
+            "desktopToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sensitive response; Cache-Control: no-store."
+          },
+          "401": {
+            "description": "Missing or invalid service token."
+          },
+          "403": {
+            "description": "Browser-origin request rejected."
+          },
+          "409": {
+            "description": "Version conflict, duplicate identity, or unsafe transition."
+          },
+          "422": {
+            "description": "Input validation failed; fields returned without input values."
+          },
+          "500": {
+            "description": "Sanitized internal error."
+          },
+          "502": {
+            "description": "Mailbox or network dependency unavailable."
+          }
+        }
+      }
+    },
+    "/api/v1/catchall/identities": {
+      "post": {
+        "summary": "Generate CSPRNG identities; does not create website accounts",
+        "security": [
+          {
+            "desktopToken": []
+          }
+        ],
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Identity"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Sensitive response; Cache-Control: no-store."
+          },
+          "401": {
+            "description": "Missing or invalid service token."
+          },
+          "403": {
+            "description": "Browser-origin request rejected."
+          },
+          "409": {
+            "description": "Version conflict, duplicate identity, or unsafe transition."
+          },
+          "422": {
+            "description": "Input validation failed; fields returned without input values."
+          },
+          "500": {
+            "description": "Sanitized internal error."
+          },
+          "502": {
+            "description": "Mailbox or network dependency unavailable."
+          }
+        }
+      }
+    },
+    "/api/v1/sessions": {
+      "get": {
+        "summary": "List account session metadata",
+        "security": [
+          {
+            "desktopToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "accountId",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed."
+          },
+          "401": {
+            "description": "Missing or invalid service token."
+          },
+          "403": {
+            "description": "Browser-origin request rejected."
+          },
+          "409": {
+            "description": "Version conflict, duplicate identity, or unsafe transition."
+          },
+          "422": {
+            "description": "Input validation failed; fields returned without input values."
+          },
+          "500": {
+            "description": "Sanitized internal error."
+          },
+          "502": {
+            "description": "Mailbox or network dependency unavailable."
+          }
+        }
+      },
+      "post": {
+        "summary": "Store encrypted session payload",
+        "security": [
+          {
+            "desktopToken": []
+          }
+        ],
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Session"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Operation completed."
+          },
+          "401": {
+            "description": "Missing or invalid service token."
+          },
+          "403": {
+            "description": "Browser-origin request rejected."
+          },
+          "409": {
+            "description": "Version conflict, duplicate identity, or unsafe transition."
+          },
+          "422": {
+            "description": "Input validation failed; fields returned without input values."
+          },
+          "500": {
+            "description": "Sanitized internal error."
+          },
+          "502": {
+            "description": "Mailbox or network dependency unavailable."
+          }
+        }
+      }
+    },
+    "/api/v1/sessions/{id}/revoke": {
+      "post": {
+        "summary": "Revoke local saved session",
+        "security": [
+          {
+            "desktopToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Operation completed."
+          },
+          "401": {
+            "description": "Missing or invalid service token."
+          },
+          "403": {
+            "description": "Browser-origin request rejected."
+          },
+          "409": {
+            "description": "Version conflict, duplicate identity, or unsafe transition."
+          },
+          "422": {
+            "description": "Input validation failed; fields returned without input values."
+          },
+          "500": {
+            "description": "Sanitized internal error."
+          },
+          "502": {
+            "description": "Mailbox or network dependency unavailable."
+          }
+        }
+      }
+    },
+    "/api/v1/queue": {
+      "get": {
+        "summary": "Return waiting/active/completed/failed/delayed/paused counts",
+        "security": [
+          {
+            "desktopToken": []
+          }
+        ],
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Operation completed."
+          },
+          "401": {
+            "description": "Missing or invalid service token."
+          },
+          "403": {
+            "description": "Browser-origin request rejected."
+          },
+          "409": {
+            "description": "Version conflict, duplicate identity, or unsafe transition."
+          },
+          "422": {
+            "description": "Input validation failed; fields returned without input values."
+          },
+          "500": {
+            "description": "Sanitized internal error."
+          },
+          "502": {
+            "description": "Mailbox or network dependency unavailable."
+          }
+        }
+      }
+    },
+    "/api/v1/queue/pause": {
+      "post": {
+        "summary": "Pause acquisition; active jobs continue",
+        "security": [
+          {
+            "desktopToken": []
+          }
+        ],
+        "parameters": [],
+        "responses": {
+          "202": {
+            "description": "Operation completed."
+          },
+          "401": {
+            "description": "Missing or invalid service token."
+          },
+          "403": {
+            "description": "Browser-origin request rejected."
+          },
+          "409": {
+            "description": "Version conflict, duplicate identity, or unsafe transition."
+          },
+          "422": {
+            "description": "Input validation failed; fields returned without input values."
+          },
+          "500": {
+            "description": "Sanitized internal error."
+          },
+          "502": {
+            "description": "Mailbox or network dependency unavailable."
+          }
+        }
+      }
+    },
+    "/api/v1/queue/resume": {
+      "post": {
+        "summary": "Resume queue acquisition",
+        "security": [
+          {
+            "desktopToken": []
+          }
+        ],
+        "parameters": [],
+        "responses": {
+          "202": {
+            "description": "Operation completed."
+          },
+          "401": {
+            "description": "Missing or invalid service token."
+          },
+          "403": {
+            "description": "Browser-origin request rejected."
+          },
+          "409": {
+            "description": "Version conflict, duplicate identity, or unsafe transition."
+          },
+          "422": {
+            "description": "Input validation failed; fields returned without input values."
+          },
+          "500": {
+            "description": "Sanitized internal error."
+          },
+          "502": {
+            "description": "Mailbox or network dependency unavailable."
+          }
+        }
+      }
+    },
+    "/api/v1/logs": {
+      "get": {
+        "summary": "Paginated redacted audit log",
+        "security": [
+          {
+            "desktopToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 25,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          },
+          {
+            "in": "query",
+            "name": "search",
+            "required": false,
+            "schema": {
+              "default": "",
+              "type": "string",
+              "maxLength": 200
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Operation completed."
+          },
+          "401": {
+            "description": "Missing or invalid service token."
+          },
+          "403": {
+            "description": "Browser-origin request rejected."
+          },
+          "409": {
+            "description": "Version conflict, duplicate identity, or unsafe transition."
+          },
+          "422": {
+            "description": "Input validation failed; fields returned without input values."
+          },
+          "500": {
+            "description": "Sanitized internal error."
+          },
+          "502": {
+            "description": "Mailbox or network dependency unavailable."
+          }
+        }
+      }
+    }
+  }
+}

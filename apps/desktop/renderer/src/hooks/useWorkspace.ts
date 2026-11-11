@@ -20,8 +20,10 @@ export function useCommand<T>(fn: (input: T) => Promise<unknown>, message?: stri
     mutationFn: fn,
     retry: false,
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: keys.workspace });
       if (message) push(message);
+    },
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: keys.workspace });
     },
     onError: (error) =>
       push(error instanceof Error ? error.message : 'The operation failed. Try again.', 'error'),

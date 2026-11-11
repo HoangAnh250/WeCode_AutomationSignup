@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { randomUUID } from "node:crypto";
 import { _electron as electron } from "playwright";
+import { expect } from "@playwright/test";
 import assert from "node:assert/strict";
 import { mkdtemp, mkdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -256,6 +257,14 @@ const backend = createServer((req, res) => {
     });
     return;
   }
+  if (req.url === `/api/v1/email-configs/${emailRecords[0]?.id}/app-password`) {
+    res.end(
+      JSON.stringify({
+        appPassword: savedEmailConfiguration.appPassword.replace(/\s/g, ""),
+      }),
+    );
+    return;
+  }
   if (req.url === "/api/v1/email-configs") {
     res.end(JSON.stringify(emailRecords));
     return;
@@ -362,10 +371,13 @@ try {
   assert.equal(savedEmailConfiguration.accountDomain, "mytic.website");
   assert.equal(savedEmailConfiguration.inboxAddress, "alo123@gmail.com");
   assert.equal(savedEmailConfiguration.mailbox, "Verification");
-  assert.equal(
-    await page.getByLabel("App Password", { exact: true }).inputValue(),
-    "",
-  );
+  const appPassword = page.getByLabel("App Password", { exact: true });
+  await expect(appPassword).toHaveValue("abcdefghijklmnop");
+  await expect(appPassword).toHaveAttribute("type", "password");
+  await page.getByRole("button", { name: "Show App Password" }).click();
+  await expect(appPassword).toHaveAttribute("type", "text");
+  await page.getByRole("button", { name: "Hide App Password" }).click();
+  await expect(appPassword).toHaveAttribute("type", "password");
   const settings = JSON.parse(
     await readFile(join(exportRoot, "desktop-settings.json"), "utf8"),
   );
@@ -399,6 +411,26 @@ try {
     window.wecode.client.getWorkspace(),
   );
   assert.equal(restored.accounts.length, 2);
+  await restarted
+    .getByRole("button", { name: "Settings", exact: true })
+    .click();
+  await restarted
+    .getByRole("button", { name: "Manage OTP inbox", exact: true })
+    .click();
+  const restoredPassword = restarted.getByLabel("App Password", {
+    exact: true,
+  });
+  await expect(restoredPassword).toHaveValue("abcdefghijklmnop");
+  await expect(restoredPassword).toHaveAttribute("type", "password");
+  await restarted.getByRole("button", { name: "Show App Password" }).click();
+  await expect(restoredPassword).toHaveAttribute("type", "text");
+  await expect(restoredPassword).toHaveValue("abcdefghijklmnop");
+  assert.ok(!JSON.stringify(restored).includes("abcdefghijklmnop"));
+  const localStorage = await restarted.evaluate(() =>
+    JSON.stringify({ ...window.localStorage }),
+  );
+  assert.ok(!localStorage.includes("abcdefghijklmnop"));
+  assert.ok(!localStorage.includes("abcd efgh"));
 
   await restarted.getByRole("button", { name: "Tasks", exact: true }).click();
   await restarted
@@ -442,7 +474,7 @@ try {
     "PASS: encrypted Windows backend connection survives app restart without WECODE_API_TOKEN or URL environment variables.",
   );
   console.log(
-    "PASS: actual Electron email UI -> IPC -> separate domain/inbox IMAP configuration -> persisted mailbox selection; App Password cleared.",
+    "PASS: actual Electron email UI -> IPC -> separate domain/inbox IMAP configuration -> persisted mailbox selection; App Password reloaded masked with Show/Hide after a full restart.",
   );
   console.log(
     "PASS: unchanged React export -> validated IPC -> authenticated backend -> selected-row CSV with saved password -> native file writer; invalid IPC rejected.",

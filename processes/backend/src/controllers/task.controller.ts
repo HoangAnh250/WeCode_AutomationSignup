@@ -1,5 +1,10 @@
 import type { Request, Response } from 'express';
-import { taskCreateSchema, taskUpdateSchema, commandSchema } from '../contracts/schemas.js';
+import {
+  taskCreateSchema,
+  taskUpdateSchema,
+  commandSchema,
+  taskBatchCreateSchema,
+} from '../contracts/schemas.js';
 import { pageSchema } from '../core/pagination.js';
 import type { TaskManager } from '../services/task.service.js';
 import { paramId, idempotencyKey } from './helpers.js';
@@ -15,6 +20,9 @@ export class TaskController {
     res
       .status(201)
       .json(await this.service.create(taskCreateSchema.parse(req.body), idempotencyKey(req)));
+  };
+  createBatch = async (req: Request, res: Response) => {
+    res.status(201).json(await this.service.createBatch(taskBatchCreateSchema.parse(req.body)));
   };
   update = async (req: Request, res: Response) => {
     const input = taskUpdateSchema.parse(req.body);

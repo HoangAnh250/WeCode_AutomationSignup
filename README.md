@@ -26,8 +26,8 @@ Stop any earlier browser preview using port 5173 before npm run dev. Closing the
 
 npm run dist writes:
 
-- release/WeCode-0.1.3-Setup-x64.exe
-- release/WeCode-0.1.3-Portable-x64.exe
+- release/WeCode-0.1.7-Setup-x64.exe
+- release/WeCode-0.1.7-Portable-x64.exe
 - release/win-unpacked/WeCode.exe
 
 The NSIS wizard installs per-user, supports installation-directory selection and creates Start menu/desktop shortcuts. Portable runs without installation. The current artifacts are unsigned because no Authenticode certificate is configured. Versions in artifact names follow package.json.
@@ -38,7 +38,7 @@ The desktop client does not replace or embed PostgreSQL, Redis, the API or autom
 
 During repository development, Electron main can read the existing backend .env to obtain API_TOKEN. In packaged builds, set WECODE_API_TOKEN to the same token as the local backend. WECODE_BACKEND_URL optionally overrides http://127.0.0.1:4317/; only loopback HTTP origins are accepted. Do not use VITE_ environment variables for secrets. Neither .env files nor backend secrets are bundled into the installers.
 
-Without a configured/reachable backend, the desktop window still opens with empty tables and a connection diagnostic in Logs. It does not create simulated accounts or acknowledge business operations as successful. Settings persist in the OS application-data directory. Database-dependent actions report a connection error until the existing services are available. The target-specific account-creation workflow adapter remains a separate automation-engine integration point.
+Without a configured/reachable backend, the desktop window still opens with empty tables and a connection diagnostic in Logs. It does not create simulated accounts or acknowledge business operations as successful. Settings persist in the OS application-data directory. Database-dependent actions report a connection error until the existing services are available. The current production backend registers the Weverse account-creation adapter; apply its workflow-state migration and restart the worker after updating.
 
 The existing account Export button sends includePasswords=true through preload, with no checkbox. Main delegates to the backend's guarded export API, filters the selected account IDs and uses native Save As. List responses and renderer workspace state do not contain passwords. Session tokens are not exported.
 
@@ -59,3 +59,19 @@ Task Retry and readable execution logs: [TASK_DIAGNOSTICS.md](docs/TASK_DIAGNOST
 ## Source import history
 
 See [development milestones and provenance](docs/DEVELOPMENT_HISTORY.md). The initial commit series imports modules from the current working tree; it is not recovered historical release snapshots.
+
+## Saved Gmail App Password
+
+Desktop 0.1.4 reloads the saved OTP inbox App Password when Email integration opens. Use Show Password / Hide Password to inspect it. Settings -> Manage OTP inbox opens the same form. Existing encrypted credentials are retained; no database migration is required. Rebuild/restart the backend together with the desktop app for the new credential-loading endpoint. See [email behavior](docs/EMAIL_AUDIT.md).
+
+## Weverse workflow implementation
+
+Production backend startup now registers WeverseAdapter as create-account. Run npm run db:generate, npm run db:migrate and npm run backend:build, then restart the backend worker. Existing desktop task/OTP/account interfaces remain in place. The implementation is verified with local Chromium/API/mail/database-port fixtures; live Weverse account creation and Gmail delivery have not been tested. See [adapter implementation and limitations](processes/backend/docs/WEVERSE_ADAPTER.md). Earlier release notes above describe their respective previous builds.
+
+## OTP and batch update (0.1.5)
+
+Tracking URLs no longer count as OTP candidates. Batch size 10 creates ten separate one-account rows with Start all. New tasks default to visible browsers; Weverse Block Overseas Logins is always turned off and enforced in the final request. See [behavior and verification](docs/OTP_BATCH_FIX.md).
+
+Desktop/backend update 0.1.6 selects Agree to All on the signup terms screen, supports collapsed groups and keeps Block Overseas Logins off. Restart the current worker to load the change.
+
+Desktop 0.1.7 displays the running Electron version in the title bar, sidebar and footer, plus version/build time in Settings. The browser preview reads the root build manifest version.

@@ -16,10 +16,12 @@ The initial commits group the current implementation into logical module-import 
 8. Task diagnostics, readable logs, safe Retry state and regression coverage.
 9. Current operating guides, verification records and complete source-tree map.
 
-## Current application boundary
+## Application boundary at the initial import
 
-The desktop and automation infrastructure exist. A target-specific Weverse signup workflow adapter has not been implemented or registered. Actual signup tasks stop with WORKFLOW_NOT_CONFIGURED before browser actions. This history does not claim working end-to-end Weverse registration.
+At the initial import, the desktop and automation infrastructure existed. A target-specific Weverse signup workflow adapter has not been implemented or registered. Actual signup tasks stop with WORKFLOW_NOT_CONFIGURED before browser actions. This history does not claim working end-to-end Weverse registration.
 
 ## Publication exclusions
 
 Local .env files, actual API/encryption keys, exported account credentials, captured HAR traffic, runtime logs, browser state, dependencies, test output and release binaries are excluded. Credentials appearing in examples, test fixtures or the local development compose configuration are intentional development fixtures.
+
+Subsequent working-tree development adds the registered WeverseAdapter; see [current implementation](../processes/backend/docs/WEVERSE_ADAPTER.md). The initial-import boundary above records the state of that earlier milestone.

@@ -43,3 +43,7 @@ A task snapshot contains revision and allowedActions. It must not offer retry or
 - Browser preview file inputs and downloads are development conveniences, not native desktop dialogs.
 - Production without a valid facade displays a service-unavailable screen and never synthesizes records.
 - Detach all event listeners when the subscription is disposed. Multi-workspace support requires workspace-scoped keys and events before extension.
+
+## Saved IMAP credential access (desktop 0.1.4)
+
+getEmailAppPassword(id: UUID): Promise<string> is an allowlisted capability for the selected inbox settings form. It retrieves the existing encrypted credential through the authenticated no-store backend endpoint. It is separate from workspace/log responses and does not emit a data event. The active form reloads it masked and offers Show/Hide; plaintext is never put in persisted renderer stores. saveEmail still accepts an omitted password to retain the saved value.

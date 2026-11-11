@@ -11,6 +11,7 @@ interface Slot {
   context?: BrowserContext;
   close?: () => Promise<void>;
   poisoned: boolean;
+  headless?: boolean;
 }
 export class BrowserManager {
   private readonly admission: Semaphore;
@@ -44,6 +45,7 @@ export class BrowserManager {
   }
   acquire(input: {
     mode: 'isolated' | 'persistent';
+    headless?: boolean;
     directory?: string;
     proxy?: BrowserProxy;
     state?: StorageState;
@@ -59,6 +61,7 @@ export class BrowserManager {
   }
   private async open(input: {
     mode: 'isolated' | 'persistent';
+    headless?: boolean;
     directory?: string;
     proxy?: BrowserProxy;
     state?: StorageState;
@@ -85,7 +88,7 @@ export class BrowserManager {
     let closed = false;
     const controller = new AbortController();
     const launch = {
-      headless: this.config.BROWSER_HEADLESS,
+      headless: input.headless ?? this.config.BROWSER_HEADLESS,
       channel: this.config.BROWSER_CHANNEL === 'chromium' ? undefined : this.config.BROWSER_CHANNEL,
       timeout: 30000,
     };
@@ -118,17 +121,24 @@ export class BrowserManager {
           ...launch,
           proxy,
           acceptDownloads: false,
+          serviceWorkers: 'block',
         });
         slot.browser = context.browser() ?? undefined;
         if (input.state) await context.setStorageState(input.state);
       } else {
+        if (slot.browser?.isConnected() && slot.headless !== launch.headless) {
+          await bounded(slot.browser.close(), 10000, 'BROWSER_CLOSE_TIMEOUT');
+          slot.browser = undefined;
+        }
         if (!slot.browser?.isConnected()) slot.browser = await chromium.launch(launch);
         context = await slot.browser.newContext({
           proxy,
           storageState: input.state,
           acceptDownloads: false,
+          serviceWorkers: 'block',
         });
       }
+      slot.headless = launch.headless;
       slot.context = context;
       context.setDefaultTimeout(this.config.BROWSER_ACTION_TIMEOUT_MS);
       context.setDefaultNavigationTimeout(this.config.BROWSER_NAVIGATION_TIMEOUT_MS);

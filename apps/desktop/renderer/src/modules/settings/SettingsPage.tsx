@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { appVersion, appBuildTime } from '@/lib/app-info';
 import { Save, SlidersHorizontal, KeyRound, Monitor, ShieldCheck } from 'lucide-react';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { Button } from '@/components/ui/button';
@@ -11,6 +12,7 @@ import type { WorkspaceData } from '@/types/domain';
 export function SettingsPage({ data }: { data: WorkspaceData }) {
   const [settings, setSettings] = useState({ ...data.preferences });
   const [error, setError] = useState('');
+  const navigate = useWorkbench((s) => s.navigate);
   const density = useWorkbench((s) => s.density);
   const setDensity = useWorkbench((s) => s.setDensity);
   const save = useCommand(
@@ -204,13 +206,32 @@ export function SettingsPage({ data }: { data: WorkspaceData }) {
               </div>
             </div>
           </section>
+          <section className="panel settings-panel">
+            <div className="panel-heading">
+              <div>
+                <h2>OTP inbox / Gmail IMAP</h2>
+                <p>Saved App Passwords reload automatically in Email integration.</p>
+              </div>
+            </div>
+            <div className="form-stack">
+              <p className="small-text">
+                {data.email.configured ? data.email.address : 'No OTP inbox configured.'}
+              </p>
+              <p className="small-text muted">
+                View or update your saved App Password using Show / Hide Password. Credentials
+                remain encrypted in the local backend.
+              </p>
+              <Button onClick={() => navigate('email')}>Manage OTP inbox</Button>
+            </div>
+          </section>
           <section className="panel about-panel">
             <Monitor size={24} />
             <div>
               <strong>WeCode Desktop</strong>
-              <p>Automation workbench / Renderer v0.1.0</p>
+              <p>Version {appVersion}</p>
+              <p className="small-text muted">Built {appBuildTime}</p>
             </div>
-            <span className="protocol">Electron-ready</span>
+            <span className="protocol">Desktop</span>
           </section>
         </div>
         {error && (

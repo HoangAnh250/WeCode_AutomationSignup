@@ -214,7 +214,10 @@ describe("Electron security and desktop adapter", () => {
     ];
     const server = createServer((req, res) => {
       res.setHeader("Content-Type", "application/json");
-      if (req.method === "POST" && req.url === "/api/v1/tasks") {
+      if (
+        req.method === "POST" &&
+        (req.url === "/api/v1/tasks" || req.url === "/api/v1/tasks/batch")
+      ) {
         const chunks: Buffer[] = [];
         req.on("data", (chunk) => chunks.push(Buffer.from(chunk)));
         req.on("end", () => {
@@ -238,6 +241,10 @@ describe("Electron security and desktop adapter", () => {
             total: 1,
           }),
         );
+        return;
+      }
+      if (req.url === `/api/v1/email-configs/${first}/app-password`) {
+        res.end(JSON.stringify({ appPassword: "FixtureOnlyPassword123" }));
         return;
       }
       if (req.url === "/api/v1/email-configs")
@@ -272,6 +279,27 @@ describe("Electron security and desktop adapter", () => {
       );
       const data = await service.getWorkspace();
       assert.equal(data.email.address, "alo123@gmail.com");
+      assert.equal(
+        await service.getEmailAppPassword(first),
+        "FixtureOnlyPassword123",
+      );
+      await assert.rejects(service.getEmailAppPassword(second));
+      const reopenedStore = new DesktopStore(file);
+      await reopenedStore.load();
+      const reopened = new DesktopService(
+        api,
+        reopenedStore,
+        async () => {},
+        () => {},
+      );
+      assert.equal(
+        await reopened.getEmailAppPassword(first),
+        "FixtureOnlyPassword123",
+      );
+      assert.ok(!JSON.stringify(data).includes("FixtureOnlyPassword123"));
+      assert.ok(
+        !(await readFile(file, "utf8")).includes("FixtureOnlyPassword123"),
+      );
       assert.equal(data.preferences.catchallDomain, "mytic.website");
       await service.createTask({
         name: "Create Account",
@@ -292,6 +320,20 @@ describe("Electron security and desktop adapter", () => {
       });
       assert.equal(posted.config.browser.proxyMode, "direct");
       assert.equal(posted.config.proxyId, undefined);
+      const batchId = randomUUID();
+      await service.createTask({
+        name: "Ten accounts",
+        workflow: "Weverse Signup",
+        total: 10,
+        proxy: "Local (no proxy)",
+        profile: "Auto assign",
+        creationId: batchId,
+        showBrowser: true,
+      });
+      assert.equal(posted.batchId, batchId);
+      assert.equal(posted.size, 10);
+      assert.equal(posted.task.config.count, 1);
+      assert.equal(posted.task.config.browser.headless, false);
 
       assert.ok(!JSON.stringify(posted).includes("alo123@gmail.com"));
       assert.ok(!JSON.stringify(posted).includes("legacy.example"));

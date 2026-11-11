@@ -7,6 +7,10 @@ export class EmailController {
   list = async (_req: Request, res: Response) => {
     res.json(await this.service.list());
   };
+  appPassword = async (req: Request, res: Response) => {
+    res.setHeader('Cache-Control', 'no-store');
+    res.json({ appPassword: await this.service.appPassword(paramId(req)) });
+  };
   create = async (req: Request, res: Response) => {
     res.status(201).json(await this.service.create(emailConfigSchema.parse(req.body)));
   };

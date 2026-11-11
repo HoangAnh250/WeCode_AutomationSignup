@@ -35,6 +35,7 @@ const schema = z.object({
   BROWSER_NAVIGATION_TIMEOUT_MS: z.coerce.number().int().min(100).max(120000).default(30000),
   BROWSER_EXECUTION_TIMEOUT_MS: z.coerce.number().int().min(1000).max(3600000).default(300000),
   BROWSER_SESSION_TTL_SECONDS: z.coerce.number().int().min(60).max(2592000).default(259200),
+  WEVERSE_OTP_SENDER: z.string().email().default('noreply@weverse.io'),
   PROXY_PROBE_URL: z
     .string()
     .url()

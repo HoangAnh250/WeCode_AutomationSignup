@@ -108,13 +108,24 @@ test('account search, verification filter and filtered CSV export', async ({ pag
   expect(text).toContain('\r\n');
   expect(text.charCodeAt(0)).toBe(0xfeff);
 });
-test('mailbox password is cleared and never persisted', async ({ page }) => {
+test('saved mailbox password reloads masked and can be shown without browser persistence', async ({
+  page,
+}) => {
   await page.goto('/');
   await navigate(page, 'Email integration');
   const password = page.getByLabel('App Password', { exact: true });
   await password.fill('abcd efgh ijkl mnop');
   await page.getByRole('button', { name: 'Save connection' }).click();
-  await expect(password).toHaveValue('');
+  await expect(password).toHaveValue('abcd efgh ijkl mnop');
+  await expect(password).toHaveAttribute('type', 'password');
+  await page.getByRole('button', { name: 'Show App Password' }).click();
+  await expect(password).toHaveAttribute('type', 'text');
+  await page.getByRole('button', { name: 'Hide App Password' }).click();
+  await expect(password).toHaveAttribute('type', 'password');
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.getByRole('button', { name: 'Manage OTP inbox' }).click();
+  await expect(password).toHaveValue('abcd efgh ijkl mnop');
+  await expect(password).toHaveAttribute('type', 'password');
   const stored = await page.evaluate(() => JSON.stringify({ ...localStorage }));
   expect(stored).not.toContain('abcd');
   await page.getByRole('button', { name: 'Test connection' }).click();
@@ -238,6 +249,7 @@ test('preload bridge is used instead of preview and command errors surface', asy
         deleteProfile: unavailable,
         saveEmail: unavailable,
         testEmail: unavailable,
+        getEmailAppPassword: async () => '',
         getEmailVerifications: async () => [],
         savePreferences: unavailable,
         getLogs: async () => [],
@@ -291,7 +303,7 @@ test('account domain and OTP inbox stay separate with preview and forwarding flo
   await page.getByLabel('IMAP folder', { exact: true }).fill('Verification');
   await page.getByLabel('App Password', { exact: true }).fill('abcd efgh ijkl mnop');
   await page.getByRole('button', { name: 'Save connection', exact: true }).click();
-  await expect(page.getByLabel('App Password', { exact: true })).toHaveValue('');
+  await expect(page.getByLabel('App Password', { exact: true })).toHaveValue('abcd efgh ijkl mnop');
   await expect(page.getByRole('list', { name: 'Email verification workflow' })).toContainText(
     'alo123@gmail.com',
   );
@@ -344,4 +356,28 @@ test('failed preview tasks expose Retry and requeue on manual request', async ({
   await expect(page.getByRole('row').filter({ hasText: 'Account recovery checks' })).toContainText(
     'pending',
   );
+});
+
+test('batch size ten creates ten separate rows and Start all starts only the selected batch', async ({
+  page,
+}) => {
+  await page.goto('/');
+  await navigate(page, 'Tasks');
+  await page.getByRole('button', { name: 'Create task', exact: true }).click();
+  const dialog = page.getByRole('dialog');
+  await dialog.getByLabel('Task name').fill('Ten accounts');
+  await dialog.getByLabel('Batch size', { exact: true }).fill('10');
+  await expect(dialog.getByLabel('Browser profile')).toBeDisabled();
+  await dialog.getByRole('button', { name: 'Create task', exact: true }).click();
+  const table = page.getByRole('table', { name: 'Automation tasks' });
+  await expect(table.locator('tbody tr')).toHaveCount(10);
+  await expect(table.getByText('Ten accounts [01/10]', { exact: true })).toBeVisible();
+  await expect(table.getByText('Ten accounts [10/10]', { exact: true })).toBeVisible();
+  await expect(table.getByText('draft', { exact: true })).toHaveCount(10);
+  await page.screenshot({ path: 'test-results/batch-ten-rows.png', fullPage: true });
+  await page.getByRole('button', { name: 'Start all (10)', exact: true }).click();
+  await expect(table.getByText('running', { exact: true })).toHaveCount(10);
+  await expect(page.getByRole('button', { name: 'Start all (0)', exact: true })).toBeDisabled();
+  await page.getByLabel('Filter task batch').selectOption('');
+  await expect(table.locator('tbody tr').filter({ hasText: 'Ten accounts [' })).toHaveCount(10);
 });

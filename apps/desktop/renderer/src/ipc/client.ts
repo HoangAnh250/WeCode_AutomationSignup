@@ -18,6 +18,7 @@ const offline: DesktopClient = {
   createProfile: unavailable,
   deleteProfile: unavailable,
   saveEmail: unavailable,
+  getEmailAppPassword: unavailable,
   getEmailVerifications: unavailable,
   testEmail: unavailable,
   savePreferences: unavailable,
@@ -74,6 +75,10 @@ function desktop(): DesktopClient | undefined {
     createProfile: (...a) => c.createProfile(...a),
     deleteProfile: (...a) => c.deleteProfile(...a),
     saveEmail: (...a) => c.saveEmail(...a),
+    getEmailAppPassword: (id) =>
+      typeof c.getEmailAppPassword === 'function'
+        ? c.getEmailAppPassword(id)
+        : Promise.reject(new Error('Update Electron to reload the saved App Password.')),
     getEmailVerifications: () =>
       typeof c.getEmailVerifications === 'function'
         ? c.getEmailVerifications()

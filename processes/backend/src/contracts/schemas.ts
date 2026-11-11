@@ -45,6 +45,7 @@ export const browserTaskSchema = z
     proxyMode: z.enum(['direct', 'auto', 'fixed']).default('direct'),
     rotateOnFailure: z.boolean().default(false),
     sessionId: idSchema.optional(),
+    headless: z.boolean().optional(),
   })
   .strict();
 export const profileCreateSchema = z
@@ -70,6 +71,22 @@ export const taskConfigSchema = z
     }),
     proxyId: idSchema.optional(),
     browser: browserTaskSchema.optional(),
+    batch: z
+      .object({
+        id: idSchema,
+        index: z.number().int().min(1).max(1000),
+        size: z.number().int().min(1).max(1000),
+        name: z.string().min(1).max(120),
+      })
+      .strict()
+      .optional(),
+    weverse: z
+      .object({
+        language: z.literal('en').default('en'),
+        timeZone: z.string().min(1).max(80).optional(),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 export const taskCreateSchema = z
@@ -79,6 +96,14 @@ export const taskCreateSchema = z
     emailConfigId: idSchema.optional(),
   })
   .strict();
+export const taskBatchCreateSchema = z
+  .object({
+    batchId: idSchema,
+    size: z.number().int().min(1).max(1000),
+    task: taskCreateSchema,
+  })
+  .strict();
+export type TaskBatchCreate = z.infer<typeof taskBatchCreateSchema>;
 export const taskUpdateSchema = taskCreateSchema.extend({ version: z.number().int().positive() });
 export const commandSchema = z.object({ version: z.number().int().positive() }).strict();
 export const accountCreateSchema = z

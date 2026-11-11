@@ -27,6 +27,7 @@ export function routes(c: Container) {
   r.patch('/browser-profiles/:id/proxy', profile.assignProxy);
   r.get('/tasks', task.list);
   r.post('/tasks', task.create);
+  r.post('/tasks/batch', task.createBatch);
   r.get('/tasks/:id', task.get);
   r.patch('/tasks/:id', task.update);
   r.delete('/tasks/:id', task.delete);
@@ -48,6 +49,7 @@ export function routes(c: Container) {
   r.get('/proxies/:id/health', proxy.history);
   r.patch('/proxies/:id', proxy.enabled);
   r.get('/email-configs', email.list);
+  r.get('/email-configs/:id/app-password', email.appPassword);
   r.post('/email-configs', email.create);
   r.patch('/email-configs/:id', email.update);
   r.post('/email-configs/:id/test', email.test);

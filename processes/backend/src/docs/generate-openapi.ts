@@ -6,6 +6,7 @@ const schemas = {
   ProfileCreate: s.profileCreateSchema,
   ProfileProxy: z.object({ proxyId: s.idSchema.nullable() }).strict(),
   TaskCreate: s.taskCreateSchema,
+  TaskBatchCreate: s.taskBatchCreateSchema,
   TaskUpdate: s.taskUpdateSchema,
   Command: s.commandSchema,
   AccountCreate: s.accountCreateSchema,
@@ -124,6 +125,12 @@ operation(
   'Assign a proxy to an idle local profile',
   { body: 'ProfileProxy' },
 );
+operation(
+  'post',
+  '/api/v1/tasks/batch',
+  'Create an idempotent batch of isolated one-account task rows',
+  { body: 'TaskBatchCreate', status: 201 },
+);
 operation('get', '/api/v1/tasks', 'List account-creation tasks', { query: pageSchema });
 operation('post', '/api/v1/tasks', 'Create a draft task', { body: 'TaskCreate', status: 201 });
 operation('get', '/api/v1/tasks/{id}', 'Get task and latest 20 runs');
@@ -173,6 +180,12 @@ operation('post', '/api/v1/proxies/{id}/check', 'Probe configured HTTP(S) target
 operation('get', '/api/v1/proxies/{id}/health', 'Latest 100 health checks');
 operation('patch', '/api/v1/proxies/{id}', 'Enable or disable proxy', { body: 'ProxyEnabled' });
 operation('get', '/api/v1/email-configs', 'List mailbox metadata');
+operation(
+  'get',
+  '/api/v1/email-configs/{id}/app-password',
+  'Load saved IMAP App Password for the local settings form',
+  { secret: true },
+);
 operation(
   'get',
   '/api/v1/email-configs/{id}/verifications',

@@ -12,6 +12,8 @@ const pages: PageId[] = [
   'settings',
 ];
 interface WorkbenchState {
+  taskBatchId?: string;
+  selectTaskBatch: (id?: string) => void;
   page: PageId;
   collapsed: boolean;
   density: 'comfortable' | 'compact';
@@ -22,6 +24,8 @@ interface WorkbenchState {
 export const useWorkbench = create<WorkbenchState>()(
   persist(
     (set) => ({
+      taskBatchId: undefined,
+      selectTaskBatch: (taskBatchId) => set({ taskBatchId }),
       page: 'dashboard',
       collapsed: false,
       density: 'comfortable',

@@ -44,10 +44,12 @@ WeCode/
 |       |   |   |-- hooks/
 |       |   |   |   |-- useDebouncedValue.ts
 |       |   |   |   |-- useDesktopEvents.ts
+|       |   |   |   |-- useEmailCredential.ts
 |       |   |   |   `-- useWorkspace.ts
 |       |   |   |-- ipc/
 |       |   |   |   `-- client.ts
 |       |   |   |-- lib/
+|       |   |   |   |-- app-info.ts
 |       |   |   |   |-- proxy-parser.ts
 |       |   |   |   |-- task-diagnostics.ts
 |       |   |   |   `-- utils.ts
@@ -80,6 +82,7 @@ WeCode/
 |       |   |   |-- styles/
 |       |   |   |   `-- globals.css
 |       |   |   |-- types/
+|       |   |   |   |-- build.d.ts
 |       |   |   |   |-- desktop.d.ts
 |       |   |   |   `-- domain.ts
 |       |   |   `-- main.tsx
@@ -113,6 +116,7 @@ WeCode/
 |   |-- DESKTOP.md
 |   |-- DEVELOPMENT_HISTORY.md
 |   |-- EMAIL_AUDIT.md
+|   |-- OTP_BATCH_FIX.md
 |   |-- TASK_DIAGNOSTICS.md
 |   `-- VERIFICATION.md
 |-- processes/
@@ -122,7 +126,8 @@ WeCode/
 |       |-- docs/
 |       |   |-- AUTOMATION_ENGINE.md
 |       |   |-- OPERATIONS.md
-|       |   `-- VERIFICATION.md
+|       |   |-- VERIFICATION.md
+|       |   `-- WEVERSE_ADAPTER.md
 |       |-- prisma/
 |       |   |-- migrations/
 |       |   |   |-- 202611070001_initial/
@@ -131,6 +136,8 @@ WeCode/
 |       |   |   |   `-- migration.sql
 |       |   |   |-- 202611100001_email_roles/
 |       |   |   |   `-- migration.sql
+|       |   |   |-- 202611110001_workflow_state/
+|       |   |   |   `-- migration.sql
 |       |   |   `-- migration_lock.toml
 |       |   `-- schema.prisma
 |       |-- scripts/
@@ -138,7 +145,12 @@ WeCode/
 |       |-- src/
 |       |   |-- automation/
 |       |   |   |-- repositories/
-|       |   |   |   `-- profile.repository.ts
+|       |   |   |   |-- profile.repository.ts
+|       |   |   |   `-- workflow-state.repository.ts
+|       |   |   |-- weverse/
+|       |   |   |   |-- protocol.ts
+|       |   |   |   |-- state.ts
+|       |   |   |   `-- WeversePage.ts
 |       |   |   |-- async.ts
 |       |   |   |-- BrowserManager.ts
 |       |   |   |-- contracts.ts
@@ -146,11 +158,13 @@ WeCode/
 |       |   |   |-- EmailVerificationCoordinator.ts
 |       |   |   |-- index.ts
 |       |   |   |-- paths.ts
+|       |   |   |-- production-engine.ts
 |       |   |   |-- ProfileManager.ts
 |       |   |   |-- ProxyAssignmentService.ts
 |       |   |   |-- ProxyRotationService.ts
 |       |   |   |-- SessionManager.ts
 |       |   |   |-- StorageStateManager.ts
+|       |   |   |-- WeverseAdapter.ts
 |       |   |   |-- WorkerExecutor.ts
 |       |   |   `-- WorkflowRegistry.ts
 |       |   |-- contracts/
@@ -222,8 +236,10 @@ WeCode/
 |       |   `-- unit/
 |       |       |-- browser-pool.test.ts
 |       |       |-- core.test.ts
+|       |       |-- email-credential.test.ts
 |       |       |-- forwarded-email.test.ts
-|       |       `-- proxy-probe.test.ts
+|       |       |-- proxy-probe.test.ts
+|       |       `-- weverse-adapter.test.ts
 |       |-- .env.example
 |       |-- .prettierrc.json
 |       |-- compose.yaml

@@ -10,6 +10,7 @@ export function createPreviewClient(): DesktopClient {
         [account.id, `PreviewOnly!${String(index + 1).padStart(6, '0')}aB`] as const,
     ),
   );
+  let emailPassword = ''; // Preview only: memory for this session, never browser storage.
   let logs = createPreviewLogs();
   const listeners = new Set<(event: DesktopEvent) => void>();
   let timer: ReturnType<typeof setInterval> | undefined;
@@ -39,9 +40,20 @@ export function createPreviewClient(): DesktopClient {
       return structuredClone(data);
     },
     async createTask(input) {
-      data.tasks.unshift({
+      const batchId = input.total > 1 ? (input.creationId ?? crypto.randomUUID()) : undefined;
+      if (batchId && data.tasks.some((task) => task.batchId === batchId)) return;
+      const tasks: Task[] = Array.from({ length: input.total }, (_, offset) => ({
         ...input,
-        id: `TSK-${Date.now().toString().slice(-6)}`,
+        name:
+          input.total > 1
+            ? `${input.name} [${String(offset + 1).padStart(String(input.total).length, '0')}/${input.total}]`
+            : input.name,
+        total: 1,
+        id: crypto.randomUUID(),
+        batchId,
+        batchIndex: batchId ? offset + 1 : undefined,
+        batchSize: batchId ? input.total : undefined,
+        batchName: batchId ? input.name : undefined,
         status: 'draft',
         progress: 0,
         completed: 0,
@@ -49,8 +61,9 @@ export function createPreviewClient(): DesktopClient {
         retries: 0,
         revision: 1,
         allowedActions: ['start'],
-      });
-      addLog(`Created task: ${input.name} (preview).`);
+      }));
+      data.tasks.unshift(...tasks);
+      addLog(`Created ${tasks.length} account task row(s): ${input.name} (preview).`);
       change();
     },
     async updateTask(id, input, revision) {
@@ -130,14 +143,22 @@ export function createPreviewClient(): DesktopClient {
       data.profiles = data.profiles.filter((x) => x.id !== id);
       change();
     },
-    async saveEmail(address, _appPassword, options) {
-      data.email = { address, configured: true, status: 'unknown', ...options };
+    async getEmailAppPassword(id) {
+      if (id !== data.email.id) throw new Error('Preview inbox no longer exists.');
+      return emailPassword;
+    },
+    async saveEmail(address, appPassword, options) {
+      if (appPassword) emailPassword = appPassword;
+      data.email = {
+        id: data.email.id ?? crypto.randomUUID(),
+        address,
+        configured: true,
+        status: 'unknown',
+        ...options,
+      };
       if (options) data.preferences.catchallDomain = options.accountDomain;
       change();
-      addLog(
-        'Preview mailbox configuration saved for this session. App Password was discarded.',
-        'system',
-      );
+      addLog('Preview mailbox configuration saved in memory for this session only.', 'system');
     },
     async getEmailVerifications() {
       return [];

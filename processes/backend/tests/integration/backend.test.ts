@@ -597,4 +597,77 @@ describe.skipIf(!enabled)('PostgreSQL + Redis + Express integration', () => {
     expect(retried.body.currentRunId).not.toBe(started.currentRunId);
     expect(retried.body.status).toBe('QUEUED');
   });
+  it('creates an atomic ten-row batch with idempotent retries and one account per row', async () => {
+    const emailConfigId = await mailbox();
+    const batchId = randomUUID();
+    const input = {
+      batchId,
+      size: 10,
+      task: {
+        name: 'Batch fixture',
+        emailConfigId,
+        config: { domain: 'nam.fit', count: 1, browser: { proxyMode: 'direct' } },
+      },
+    };
+    const responses = await Promise.all(
+      [1, 2].map(() =>
+        request(app).post('/api/v1/tasks/batch').set('Authorization', authorization).send(input),
+      ),
+    );
+    expect(responses.map((response) => response.status)).toEqual([201, 201]);
+    const rows = await c.db.task.findMany({ orderBy: { name: 'asc' } });
+    expect(rows).toHaveLength(10);
+    expect(rows.every((row) => (row.config as any).count === 1 && row.status === 'DRAFT')).toBe(
+      true,
+    );
+    expect(rows.map((row) => (row.config as any).batch.index)).toEqual([
+      1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
+    ]);
+    expect(
+      (
+        await request(app)
+          .post('/api/v1/tasks/batch')
+          .set('Authorization', authorization)
+          .send({ ...input, size: 11 })
+      ).status,
+    ).toBe(409);
+    expect(await c.db.task.count()).toBe(10);
+    const first = rows[0];
+    const edited = await c.tasks.update(
+      first.id,
+      { name: 'Edited row', emailConfigId, config: first.config as any },
+      first.version,
+    );
+    expect((edited.config as any).batch.id).toBe(batchId);
+  });
+  it.each(['OTP_AMBIGUOUS', 'WEVERSE_SELECTOR_CHANGED'])(
+    'allows manual retry for an older %s failure only before creation',
+    async (errorCode) => {
+      const t = await task();
+      const started = await c.tasks.command(t.id, 'start', t.version);
+      await c.db.taskRun.update({
+        where: { id: started.currentRunId! },
+        data: {
+          status: 'FAILED',
+          errorCode,
+          retryable: false,
+          outcome: 'NOT_CREATED',
+        },
+      });
+      await c.db.task.update({ where: { id: t.id }, data: { status: 'FAILED' } });
+      const retried = await c.tasks.command(t.id, 'retry', started.version);
+      expect(retried.currentRunId).not.toBe(started.currentRunId);
+      await c.db.taskRun.update({
+        where: { id: retried.currentRunId! },
+        data: {
+          status: 'NEEDS_RECONCILIATION',
+          errorCode,
+          retryable: true,
+          outcome: 'UNKNOWN',
+        },
+      });
+      await c.db.task.update({ where: { id: t.id }, data: { status: 'NEEDS_RECONCILIATION' } });
+      await expect(c.tasks.command(t.id, 'retry', retried.version)).rejects.toThrow();
+    },
+  );
 });

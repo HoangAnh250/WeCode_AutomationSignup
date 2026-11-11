@@ -27,6 +27,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { client } from '@/ipc/client';
+import { appVersion } from '@/lib/app-info';
 import type { PageId, WorkspaceData } from '@/types/domain';
 const nav = [
   { id: 'dashboard', name: 'Overview', icon: LayoutDashboard },
@@ -80,7 +81,9 @@ export function Workbench({ children, data }: { children: ReactNode; data?: Work
               <strong>
                 WeCode<span>Desktop</span>
               </strong>
-              <span className="version-label">beta</span>
+              <span className="version-label" aria-label="Application version">
+                v{appVersion}
+              </span>
             </>
           )}
         </div>
@@ -233,7 +236,7 @@ export function Workbench({ children, data }: { children: ReactNode; data?: Work
           <span className="spacer" />
           <span>Local workspace</span>
           <span className="status-separator" />
-          <span>WeCode 0.1.0</span>
+          <span aria-label="Desktop build version">WeCode v{appVersion}</span>
         </footer>
       </div>
       <div className="toast-stack" aria-live="polite" aria-atomic="false">

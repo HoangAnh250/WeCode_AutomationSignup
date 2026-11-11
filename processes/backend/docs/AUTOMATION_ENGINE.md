@@ -24,7 +24,7 @@ From the repository root, run npm install, npm run db:generate and npm run db:mi
 
 Browser launch is lazy; a worker process starting successfully does not prove that its browser binary is installed. BROWSER_LAUNCH_FAILED is a retryable pre-commit infrastructure error.
 
-The worker's default registry is empty. This delivery implements the engine, not Weverse selectors or the target OTP/signup adapter. Without a registered adapter, tasks become BLOCKED / WORKFLOW_NOT_CONFIGURED and never produce success records. Register a trusted BrowserWorkflow with key create-account and pass that registry to createEngine in the worker composition. There is no arbitrary uploaded-script execution endpoint or dynamic code loader.
+Production startup registers WeverseAdapter under create-account through createProductionEngine. The generic createEngine default remains an empty registry for explicit custom composition and tests. Apply the workflow-state migration before restarting the production worker. See [Weverse implementation](WEVERSE_ADAPTER.md) for HAR mapping, mutation fencing and verification limits. There is no arbitrary uploaded-script execution endpoint or dynamic code loader.
 
 ## Adapter contract
 

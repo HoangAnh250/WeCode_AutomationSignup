@@ -11,6 +11,11 @@ export type TaskStatus =
   | 'needs_reconciliation';
 export type TaskAction = 'start' | 'pause' | 'resume' | 'retry';
 export interface Task {
+  showBrowser?: boolean;
+  batchId?: string;
+  batchIndex?: number;
+  batchSize?: number;
+  batchName?: string;
   id: string;
   name: string;
   workflow: string;
@@ -30,6 +35,8 @@ export interface Task {
   retryable?: boolean;
 }
 export interface TaskInput {
+  showBrowser?: boolean;
+  creationId?: string;
   name: string;
   workflow: string;
   total: number;
@@ -139,6 +146,7 @@ export interface DesktopClient {
   createProfile(name: string, proxy: string): Promise<void>;
   deleteProfile(id: string): Promise<void>;
   saveEmail(address: string, appPassword?: string, options?: EmailConnectionOptions): Promise<void>;
+  getEmailAppPassword(id: string): Promise<string>;
   getEmailVerifications(): Promise<EmailVerification[]>;
   testEmail(): Promise<void>;
   savePreferences(input: Preferences): Promise<void>;

@@ -3,11 +3,15 @@ import type { EmailManager } from '../services/email.service.js';
 import type { ExecutionContext } from '../queue/executor.js';
 import { verificationSchema } from '../contracts/schemas.js';
 import { AppError } from '../core/errors.js';
+export interface OtpDispatchReceipt {
+  expiresAt: Date;
+}
 export type WaitForOtp = (
   recipient: string,
   sender: string,
-  requestOtp: (accountEmail: string) => Promise<void>,
+  requestOtp: (accountEmail: string) => Promise<void | OtpDispatchReceipt>,
   ttlSeconds?: number,
+  options?: { fresh?: boolean },
 ) => Promise<string>;
 export class EmailVerificationCoordinator {
   constructor(
@@ -19,7 +23,7 @@ export class EmailVerificationCoordinator {
     emailConfigId: string | null,
     accountDomain: string,
   ): WaitForOtp {
-    return async (recipient, sender, requestOtp, ttlSeconds = 300) => {
+    return async (recipient, sender, requestOtp, ttlSeconds = 300, options = {}) => {
       await execution.assertCanContinue();
       if (!emailConfigId)
         throw new AppError(
@@ -41,9 +45,12 @@ export class EmailVerificationCoordinator {
           ? (execution.checkpoint as Record<string, unknown>)
           : {};
       const previous = checkpoint.emailVerification as
-        { id?: string; recipient?: string; sender?: string } | undefined;
+        | { id?: string; recipient?: string; sender?: string; dispatch?: 'sending' | 'sent' }
+        | undefined;
       let record: Awaited<ReturnType<EmailManager['status']>> | undefined;
       if (
+        !options.fresh &&
+        previous?.dispatch !== 'sending' &&
         previous?.id &&
         previous.recipient === input.recipient &&
         previous.sender === input.sender
@@ -65,11 +72,25 @@ export class EmailVerificationCoordinator {
         const created = await this.email.createVerification(emailConfigId, input);
         record = await this.email.status(created.id);
         await execution.saveCheckpoint({
-          ...checkpoint,
-          emailVerification: { id: record.id, recipient: input.recipient, sender: input.sender },
+          emailVerification: {
+            id: record.id,
+            recipient: input.recipient,
+            sender: input.sender,
+            dispatch: 'sending',
+          },
         });
         await execution.assertCanContinue();
-        await requestOtp(input.recipient);
+        const receipt = await requestOtp(input.recipient);
+        if (receipt) await this.email.limitVerificationExpiry(record.id, receipt.expiresAt);
+        record = await this.email.status(record.id);
+        await execution.saveCheckpoint({
+          emailVerification: {
+            id: record.id,
+            recipient: input.recipient,
+            sender: input.sender,
+            dispatch: 'sent',
+          },
+        });
       }
       while (record.expiresAt > new Date()) {
         await execution.assertCanContinue();

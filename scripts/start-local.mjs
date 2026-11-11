@@ -36,6 +36,24 @@ async function main() {
     );
     if (compose.status !== 0)
       throw new Error("Start Docker Desktop, then run this launcher again.");
+    const migration = spawnSync(
+      process.execPath,
+      [
+        join(root, "node_modules", "prisma", "build", "index.js"),
+        "migrate",
+        "deploy",
+      ],
+      {
+        cwd: backend,
+        env: { ...process.env, ...config },
+        stdio: "inherit",
+        windowsHide: true,
+      },
+    );
+    if (migration.status !== 0)
+      throw new Error(
+        "Database migration failed. Local services were not started.",
+      );
     const logs = join(backend, ".runtime");
     await mkdir(logs, { recursive: true });
     async function service(file, name) {

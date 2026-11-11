@@ -40,6 +40,7 @@ export interface BrowserLease {
 export interface WorkflowResult {
   account: Omit<AccountCreate, 'taskRunId'>;
   sessionExpiresAt?: Date;
+  sessionDisposition?: 'save' | 'skip';
 }
 export interface BrowserWorkflowContext {
   execution: ExecutionContext;
@@ -53,5 +54,6 @@ export interface BrowserWorkflowContext {
 export interface BrowserWorkflow {
   readonly key: string;
   execute(context: BrowserWorkflowContext): Promise<WorkflowResult>;
+  recover?(execution: ExecutionContext): Promise<WorkflowResult | undefined>;
   validateSession?(context: BrowserWorkflowContext, accountId: string): Promise<boolean>;
 }

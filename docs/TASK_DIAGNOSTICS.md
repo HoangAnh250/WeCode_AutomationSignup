@@ -1,3 +1,5 @@
+Current backend update: production startup now registers WeverseAdapter. Earlier observations below describe the previous empty-registry builds. Restart the current worker after applying the workflow-state migration. See ../processes/backend/docs/WEVERSE_ADAPTER.md for current behavior and verification limits.
+
 # Task retry and execution diagnostics (0.1.3)
 
 The observed signup attempts stopped with WORKFLOW_NOT_CONFIGURED and backend status BLOCKED. No Weverse browser workflow is registered. This module is application code that still needs implementation; it is not a Playwright dependency or downloadable plugin. Installing Chromium, retrying, or changing proxies cannot supply that missing workflow.

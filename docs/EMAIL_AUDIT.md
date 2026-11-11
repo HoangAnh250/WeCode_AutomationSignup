@@ -33,7 +33,7 @@ Additional gaps: connection test proves IMAP login only; it cannot prove DNS/cat
 | Account Email Domain | Dedicated UI field; nullable backward-compatible PostgreSQL binding; copied to Task.config.domain; mismatched domain rejected before start/OTP request. |
 | Generated Email Preview | Read-only generated sample using the account domain; explicitly not reserved, sent or guaranteed to be the final signup address. It never uses the Gmail inbox as identity. |
 | OTP Inbox | Separate Gmail address, independent of the account domain; selected EmailConfig UUID persists across desktop restarts. |
-| App Password | Write-only input cleared after save; AES-GCM backend storage; Gmail whitespace normalization; no browser/local preference persistence. |
+| App Password | Saved App Password reloads masked on reopening Email integration; Show/Hide reveals the saved value; AES-GCM backend storage and Gmail whitespace normalization remain in place. No plaintext browser/local preference persistence. |
 | IMAP | Host, port and folder exposed under Advanced settings; implicit TLS remains mandatory. Inbox test validates folder access as well as login. Changing only the account domain preserves IMAP connection status. |
 | Forwarding model | Persistent domain-to-inbox binding and visible five-step flow. Provider-side DNS/catch-all rules remain external; IMAP login never claims forwarding is configured. |
 | OTP matching | Exact generated recipient + sender + time window, original-recipient header extraction, ambiguous-code refusal and folder-scoped UID reuse protection. |
@@ -65,11 +65,21 @@ Migration was applied to the development database and both dedicated test databa
 
 The existing application structure and navigation remain intact. Modified areas are the Email Integration page, Account Domain helper text in Settings, corresponding domain/IPC types and preview adapter, Electron persistence/API adapter, EmailConfig/VerificationRequest schema, IMAP parser, email/task guards and the worker's reusable OTP coordinator. Existing pages/components outside that scope are unchanged.
 
-Verified: 66 backend tests, 15 renderer tests and eight desktop tests; strict typechecks and production builds. Raw MIME fixtures cover Gmail as final delivery address while original recipient remains alex123@mytic.website, repeated forwarding headers, wrong recipients and similar-domain non-matches. Integration tests cover legacy defaults, custom folder retention, domain guards, no-secret tracking, tracking-before-dispatch, OTP reuse across resume without resending, canonical signup domain and persisted mailbox selection. Real Electron tests exercise form -> preload/IPC -> local backend fixture -> persisted metadata; App Password is cleared and never stored in desktop settings.
+Verified: 66 backend tests, 15 renderer tests and eight desktop tests; strict typechecks and production builds. Raw MIME fixtures cover Gmail as final delivery address while original recipient remains alex123@mytic.website, repeated forwarding headers, wrong recipients and similar-domain non-matches. Integration tests cover legacy defaults, custom folder retention, domain guards, no-secret tracking, tracking-before-dispatch, OTP reuse across resume without resending, canonical signup domain and persisted mailbox selection. Real Electron tests exercise form -> preload/IPC -> local backend fixture -> persisted metadata; App Password is reloaded masked, can be shown/hidden, and is never stored in desktop settings.
 
-These tests do not prove live Gmail delivery, DNS ownership, provider forwarding rules or a completed Weverse signup. No external emails were sent or accounts created. Workflow registry remains fail-closed until an approved target adapter is registered.
+These tests do not prove live Gmail delivery, DNS ownership, provider forwarding rules or a completed Weverse signup. No external emails were sent or accounts created. At the time of that email audit, the workflow registry remained empty. The subsequent registered WeverseAdapter is documented in ../processes/backend/docs/WEVERSE_ADAPTER.md.
 
 Parser/API references: [MailParser raw header lines](https://nodemailer.com/extras/mailparser) and [ImapFlow read-only mailbox locks](https://imapflow.com/docs/api/imapflow-client/).
 
 
 Release 0.1.1: Windows Setup and Portable EXEs were generated in release/. The packaged WeCode.exe passed the same Electron email UI/IPC/persistence smoke checks. Close the older desktop process before starting 0.1.1 so the single-instance lock does not focus the old window. No existing application process was forcibly closed and no live domain/inbox values were overwritten by test examples.
+
+## Saved App Password convenience update (desktop 0.1.4)
+
+- Email integration automatically reloads the selected inbox credential when opened, including after an application restart. It starts masked; Show Password and Hide Password are keyboard-accessible buttons.
+- Settings links directly to the OTP inbox configuration. The account domain and OTP inbox remain separate.
+- The existing PostgreSQL app_password_cipher field remains the durable encrypted source of truth. Existing saved credentials work without re-entry or a schema migration.
+- GET /api/v1/email-configs/:id/app-password returns { appPassword } only with the existing desktop bearer authentication and Cache-Control: no-store. Browser-origin requests remain forbidden. Lists, workspace snapshots and events remain metadata-only.
+- The allowlisted getEmailAppPassword(id) IPC capability loads only the currently selected mailbox. Plaintext lives in the active email form; it is not persisted in Zustand, localStorage, query cache or desktop-settings.json. Unmounting cancels stale loads.
+- Saving unrelated fields omits an unchanged password, preserving the existing credential and IMAP status. Leaving the field blank retains the saved credential. Saving a replacement updates the encrypted value.
+- Browser preview mirrors the UX with session-memory fixtures only; restarting preview does not persist mailbox credentials. Desktop persistence uses PostgreSQL.

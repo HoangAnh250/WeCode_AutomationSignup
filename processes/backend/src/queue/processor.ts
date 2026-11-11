@@ -154,7 +154,16 @@ export function createTaskProcessor(
             retryable:
               !pause &&
               fresh.outcome === 'NOT_CREATED' &&
-              (retryable || ['AUTOMATION_NOT_INSTALLED', 'WORKFLOW_NOT_CONFIGURED'].includes(code)),
+              (retryable ||
+                [
+                  'AUTOMATION_NOT_INSTALLED',
+                  'WORKFLOW_NOT_CONFIGURED',
+                  'OTP_AMBIGUOUS',
+                  'OTP_TIMEOUT',
+                  'WEVERSE_SELECTOR_CHANGED',
+                  'WEVERSE_CONSENT_NOT_SELECTED',
+                  'WEVERSE_SUBMISSION_MISMATCH',
+                ].includes(code)),
             finishedAt: automaticRetry ? null : new Date(),
           },
         });
@@ -174,7 +183,16 @@ export function createTaskProcessor(
             retryable:
               !pause &&
               fresh.outcome === 'NOT_CREATED' &&
-              (retryable || ['AUTOMATION_NOT_INSTALLED', 'WORKFLOW_NOT_CONFIGURED'].includes(code)),
+              (retryable ||
+                [
+                  'AUTOMATION_NOT_INSTALLED',
+                  'WORKFLOW_NOT_CONFIGURED',
+                  'OTP_AMBIGUOUS',
+                  'OTP_TIMEOUT',
+                  'WEVERSE_SELECTOR_CHANGED',
+                  'WEVERSE_CONSENT_NOT_SELECTED',
+                  'WEVERSE_SUBMISSION_MISMATCH',
+                ].includes(code)),
           },
           pause ? 'info' : 'error',
         );

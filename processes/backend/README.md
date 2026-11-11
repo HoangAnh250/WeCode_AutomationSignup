@@ -38,11 +38,11 @@ All private endpoints require Authorization: Bearer with API_TOKEN. Secrets are 
 
 ## Automation extension
 
-`src/automation` implements BrowserManager, ProfileManager, ProxyAssignmentService, ProxyRotationService, SessionManager, StorageStateManager and WorkerExecutor. The worker now uses `createEngine`, with PostgreSQL resource leases and encrypted browser snapshots.
+`src/automation` implements BrowserManager, ProfileManager, ProxyAssignmentService, ProxyRotationService, SessionManager, StorageStateManager and WorkerExecutor. The worker now uses `createProductionEngine`, with PostgreSQL resource leases and encrypted browser snapshots.
 
 Install the matching browser once: `npm run browser:install --workspace @wecode/backend`. Alternatively set BROWSER_CHANNEL=chrome or msedge when that browser is already installed. Browser processes are launched lazily.
 
-A target-specific `BrowserWorkflow` must be registered in WorkflowRegistry and passed to createEngine. The shipped registry is empty: unconfigured tasks become BLOCKED with WORKFLOW_NOT_CONFIGURED. No website selectors, OTP flow or successful account are invented. [Engine guide](docs/AUTOMATION_ENGINE.md) describes the adapter contract, configuration, process lifecycle and verification.
+Production startup registers WeverseAdapter under create-account. Apply database migrations and restart the worker after building. The generic createEngine remains registry-explicit for custom integrations and tests. See [Weverse adapter](docs/WEVERSE_ADAPTER.md) for workflow, persistence, test evidence and live-validation limits. [Engine guide](docs/AUTOMATION_ENGINE.md) describes the adapter contract, configuration, process lifecycle and verification.
 
 The engine only marks success after a persisted account result confirms CREATED. Pure pre-side-effect transient AppErrors use BullMQ exponential backoff. Unknown side effects move to NEEDS_RECONCILIATION. One task run creates one account; larger batches require separate child tasks and currently fail explicitly rather than partially execute.
 

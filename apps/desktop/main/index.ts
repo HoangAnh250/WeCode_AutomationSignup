@@ -134,12 +134,13 @@ async function start() {
     minWidth: 980,
     minHeight: 700,
     backgroundColor: "#101218",
-    title: "WeCode",
+    title: `WeCode v${app.getVersion()}`,
     icon: join(root, "apps", "desktop", "resources", "icon.ico"),
     show: false,
     autoHideMenuBar: true,
     webPreferences: {
       preload: join(root, "apps", "desktop", "dist", "preload.cjs"),
+      additionalArguments: [`--wecode-app-version=${app.getVersion()}`],
       contextIsolation: true,
       nodeIntegration: false,
       nodeIntegrationInWorker: false,
@@ -178,7 +179,7 @@ async function start() {
   });
   owned.webContents.on("page-title-updated", (event) => {
     event.preventDefault();
-    owned.setTitle("WeCode");
+    owned.setTitle(`WeCode v${app.getVersion()}`);
   });
   owned.webContents.on("render-process-gone", () =>
     console.error(

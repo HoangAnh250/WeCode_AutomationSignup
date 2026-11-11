@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input, Select } from '@/components/ui/input';
 import { Field } from '@/components/shared/Field';
 import { useCommand } from '@/hooks/useWorkspace';
+import { useWorkbench } from '@/stores/workbench.store';
 import { workspaceService } from '@/services/workspace-service';
 import type { Task, TaskInput, WorkspaceData } from '@/types/domain';
 export function TaskEditor({
@@ -15,10 +16,14 @@ export function TaskEditor({
   data: WorkspaceData;
   onClose: () => void;
 }) {
+  const [creationId] = useState(() => crypto.randomUUID());
+  const selectBatch = useWorkbench((state) => state.selectTaskBatch);
+  const navigate = useWorkbench((state) => state.navigate);
   const [input, setInput] = useState<TaskInput>({
     name: task?.name ?? '',
     workflow: task?.workflow ?? 'Weverse Signup',
-    total: task?.total ?? 1,
+    total: 1,
+    showBrowser: task?.showBrowser ?? true,
     proxy: task?.proxy ?? 'Local (no proxy)',
     profile: task?.profile ?? 'Auto assign',
   });
@@ -28,7 +33,7 @@ export function TaskEditor({
       task
         ? workspaceService.updateTask(task.id, value, task.revision)
         : workspaceService.createTask(value),
-    task ? 'Task updated.' : 'Task created.',
+    task ? 'Task updated.' : 'Account task rows created.',
   );
   const field = <K extends keyof TaskInput>(key: K, value: TaskInput[K]) =>
     setInput((s) => ({ ...s, [key]: value }));
@@ -37,7 +42,7 @@ export function TaskEditor({
       open
       onOpenChange={(open) => !open && !command.isPending && onClose()}
       title={task ? 'Edit task' : 'Create task'}
-      description="Configure an isolated automation workflow."
+      description="Each account gets its own task row and isolated browser profile."
     >
       <form
         onSubmit={async (e) => {
@@ -46,12 +51,20 @@ export function TaskEditor({
             setError('Enter a task name.');
             return;
           }
-          if (!Number.isInteger(input.total) || input.total < 1 || input.total > 10000) {
-            setError('Batch size must be between 1 and 10,000.');
+          if (!Number.isInteger(input.total) || input.total < 1 || input.total > 1000) {
+            setError('Batch size must be between 1 and 1,000.');
             return;
           }
           try {
-            await command.mutateAsync({ ...input, name: input.name.trim() });
+            await command.mutateAsync({
+              ...input,
+              name: input.name.trim(),
+              creationId: task ? undefined : creationId,
+            });
+            if (!task) {
+              selectBatch(input.total > 1 ? creationId : undefined);
+              navigate('tasks');
+            }
             onClose();
           } catch {
             /* surfaced by command notification */
@@ -79,20 +92,33 @@ export function TaskEditor({
                   value={input.workflow}
                   onChange={(e) => field('workflow', e.target.value)}
                 >
-                  <option>Weverse Signup</option>
-                  <option>Verification</option>
+                  <option value="Weverse Signup">Create Account (Weverse)</option>
                 </Select>
               )}
             </Field>
-            <Field label="Batch size">
+            <Field
+              label={task ? 'Accounts per row' : 'Batch size'}
+              hint={
+                task
+                  ? 'One account per row. Create a new batch to add more rows.'
+                  : `${input.total} account${input.total === 1 ? '' : 's'} = ${input.total} separate task row${input.total === 1 ? '' : 's'}.`
+              }
+            >
               {(id) => (
                 <Input
                   id={id}
                   type="number"
                   min={1}
-                  max={10000}
+                  max={task ? 1 : 1000}
+                  disabled={!!task}
                   value={input.total}
-                  onChange={(e) => field('total', Number(e.target.value))}
+                  onChange={(e) =>
+                    setInput((current) => ({
+                      ...current,
+                      total: Number(e.target.value),
+                      profile: Number(e.target.value) > 1 ? 'Auto assign' : current.profile,
+                    }))
+                  }
                 />
               )}
             </Field>
@@ -126,6 +152,7 @@ export function TaskEditor({
                 <Select
                   id={id}
                   value={input.profile}
+                  disabled={!task && input.total > 1}
                   onChange={(e) => field('profile', e.target.value)}
                 >
                   <option>Auto assign</option>
@@ -136,14 +163,28 @@ export function TaskEditor({
               )}
             </Field>
           </div>
+          <div className="checkbox-grid">
+            <label>
+              <input
+                type="checkbox"
+                checked={input.showBrowser ?? true}
+                onChange={(event) => field('showBrowser', event.target.checked)}
+              />
+              Show browser while running
+            </label>
+          </div>
+          <p className="small-text muted">
+            Visible browsers let you watch the signup steps. Block Overseas Logins is always turned
+            off before submission.
+          </p>
           {error && (
             <p className="form-error" role="alert">
               {error}
             </p>
           )}
           <div className="inline-note">
-            Each execution uses its assigned browser profile. Tasks start only when you choose
-            Start.
+            Each row creates one account. Batch rows use separate Auto assign profiles. Use Start
+            all to queue the batch; worker and browser capacity control how many run at once.
           </div>
         </div>
         <div className="dialog-footer">

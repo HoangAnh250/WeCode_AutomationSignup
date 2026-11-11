@@ -39,6 +39,7 @@ model Task {
  updatedAt DateTime @updatedAt @map("updated_at")
  currentRun TaskRun? @relation("CurrentRun",fields:[currentRunId],references:[id],onDelete:SetNull)
  runs TaskRun[] @relation("TaskRuns")
+ workflowState WorkflowState?
  @@index([status,createdAt])
  @@map("tasks")
 }
@@ -211,4 +212,13 @@ model ProxyAssignment {
  @@index([proxyId,releasedAt])
  @@index([runId,ownerToken])
  @@map("proxy_assignments")
+}
+
+model WorkflowState {
+ taskId String @id @map("task_id") @db.Uuid
+ task Task @relation(fields:[taskId],references:[id],onDelete:Restrict)
+ email String @unique @db.VarChar(254)
+ payloadCipher String @map("payload_cipher")
+ updatedAt DateTime @updatedAt @map("updated_at")
+ @@map("workflow_states")
 }

@@ -2,6 +2,7 @@ import {
   taskErrorMessage,
   taskEventMessage,
 } from "../renderer/src/lib/task-diagnostics";
+import { randomUUID } from "node:crypto";
 import { parse } from "csv-parse/sync";
 import type { DesktopMethods, EventSink } from "../shared/contracts";
 import type {
@@ -131,8 +132,23 @@ export class DesktopService implements DesktopMethods {
               } as Record<string, TaskStatus>
             )[t.status] ?? "failed";
           const total = t.config.count ?? 1;
+          const retryable =
+            Boolean(
+              t.currentRun?.retryable ||
+              ["OTP_AMBIGUOUS", "OTP_TIMEOUT"].includes(
+                t.currentRun?.errorCode,
+              ),
+            ) && t.currentRun?.outcome === "NOT_CREATED";
           return {
             id: t.id,
+            showBrowser:
+              t.config.browser?.headless === undefined
+                ? undefined
+                : !t.config.browser.headless,
+            batchId: t.config.batch?.id,
+            batchIndex: t.config.batch?.index,
+            batchSize: t.config.batch?.size,
+            batchName: t.config.batch?.name,
             name: t.name,
             workflow: "Weverse Signup",
             status,
@@ -153,7 +169,7 @@ export class DesktopService implements DesktopMethods {
             lastErrorCode: t.currentRun?.errorCode ?? undefined,
             lastErrorMessage: taskErrorMessage(t.currentRun?.errorCode),
             businessOutcome: t.currentRun?.outcome,
-            retryable: Boolean(t.currentRun?.retryable),
+            retryable,
             allowedActions:
               t.status === "DRAFT"
                 ? ["start"]
@@ -162,7 +178,7 @@ export class DesktopService implements DesktopMethods {
                   : ["RUNNING", "QUEUED"].includes(t.status)
                     ? ["pause"]
                     : ["FAILED", "BLOCKED"].includes(t.status) &&
-                        t.currentRun?.retryable &&
+                        retryable &&
                         t.currentRun?.outcome === "NOT_CREATED"
                       ? ["retry"]
                       : [],
@@ -299,6 +315,8 @@ export class DesktopService implements DesktopMethods {
         },
         proxyId: proxy?.id,
         browser: {
+          headless:
+            input.showBrowser === undefined ? undefined : !input.showBrowser,
           profileId: profile?.id,
           proxyMode: directProxy
             ? "direct"
@@ -312,7 +330,14 @@ export class DesktopService implements DesktopMethods {
     };
   }
   createTask = async (input: TaskInput) => {
-    await this.api.request("/api/v1/tasks", "POST", await this.taskBody(input));
+    const task = await this.taskBody({ ...input, total: 1 });
+    if (input.total > 1)
+      await this.api.request("/api/v1/tasks/batch", "POST", {
+        batchId: input.creationId ?? randomUUID(),
+        size: input.total,
+        task,
+      });
+    else await this.api.request("/api/v1/tasks", "POST", task);
     this.notify();
   };
   updateTask = async (id: string, input: TaskInput, revision: number) => {
@@ -417,6 +442,26 @@ export class DesktopService implements DesktopMethods {
         catchallDomain: result.accountDomain,
       });
     this.notify();
+  };
+  getEmailAppPassword = async (id: string): Promise<string> => {
+    const workspace = await this.getWorkspace();
+    if (!workspace.email.configured || workspace.email.id !== id)
+      throw new DesktopError(
+        "MAILBOX_NOT_SELECTED",
+        "Refresh the selected OTP inbox before loading its App Password.",
+      );
+    const result = await this.api.request<{ appPassword: string }>(
+      `/api/v1/email-configs/${id}/app-password`,
+    );
+    if (
+      typeof result.appPassword !== "string" ||
+      result.appPassword.length > 512
+    )
+      throw new DesktopError(
+        "INVALID_EMAIL_CREDENTIAL",
+        "The saved App Password could not be loaded.",
+      );
+    return result.appPassword;
   };
   getEmailVerifications = async (): Promise<EmailVerification[]> => {
     if (!this.api.configured) return [];

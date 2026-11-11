@@ -1391,15 +1391,16 @@ strong {
   line-height: 1.8;
 }
 .password-input {
-  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 .password-input .input {
-  padding-right: 40px;
+  flex: 1;
+  min-width: 0;
 }
 .password-input .button {
-  position: absolute;
-  right: 4px;
-  top: 3px;
+  flex-shrink: 0;
 }
 .settings-sections {
   max-width: 850px;

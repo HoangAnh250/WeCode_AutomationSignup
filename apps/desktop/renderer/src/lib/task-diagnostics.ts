@@ -2,7 +2,7 @@ export function taskErrorMessage(code?: string) {
   const messages: Record<string, string> = {
     PAUSED: 'Execution paused at a safe checkpoint.',
     WORKFLOW_NOT_CONFIGURED:
-      'Signup is unavailable in this build: the Weverse workflow module has not been installed. The browser was not opened. Retry requires that module first.',
+      'The active worker has no adapter registered for this task; the browser was not opened. Restart it with the current production backend before retrying.',
     AUTOMATION_NOT_INSTALLED:
       'The browser workflow is not installed. Update the workflow before retrying.',
     BATCH_REQUIRES_CHILD_TASKS:
@@ -18,6 +18,25 @@ export function taskErrorMessage(code?: string) {
     STALE_EXECUTION: 'An earlier worker execution needs review before this task can run again.',
     BUSINESS_OUTCOME_UNKNOWN:
       'The external account result is uncertain. Review it before attempting another signup.',
+    WEVERSE_CONSENT_NOT_SELECTED: 'The Agree to All control was not selected.',
+    WEVERSE_OVERSEAS_BLOCK_ENABLED:
+      'Signup stopped because Block Overseas Logins was still enabled.',
+    WEVERSE_PASSWORD_POLICY:
+      'Weverse requires a password of at most 32 characters with letters, numbers and symbols.',
+    WEVERSE_SELECTOR_CHANGED: 'The Weverse page controls changed. Review the adapter selectors.',
+    WEVERSE_SELECTOR_AMBIGUOUS:
+      'More than one Weverse control matched; execution stopped before guessing.',
+    WEVERSE_PROTOCOL_CHANGED: 'A Weverse response changed. The adapter requires review.',
+    WEVERSE_RATE_LIMITED: 'Weverse rate-limited this operation. Wait before trying again.',
+    WEVERSE_CHALLENGE_REQUIRED:
+      'Weverse rejected or challenged this session. Operator review is required.',
+    WEVERSE_SUBMISSION_MISMATCH:
+      'The final signup payload did not match the active identity or consent policy.',
+    WEVERSE_SIGNUP_TRANSPORT_ERROR:
+      'The final signup response was lost. Review the result before another signup.',
+    WORKFLOW_STATE_CORRUPT:
+      'Saved workflow state could not be authenticated. Check the encryption key and stored data.',
+    WORKFLOW_LEASE_LOST: 'This worker no longer owns the task.',
     OTP_TIMEOUT: 'No matching verification code arrived before the request expired.',
     OTP_AMBIGUOUS: 'Multiple verification codes matched. A code was not guessed.',
     IMAP_SCAN_FAILED: 'The OTP inbox could not be read. Check the mailbox connection.',
@@ -44,6 +63,18 @@ export function taskEventMessage(event: string, code?: string) {
     'task.browser_opened': 'Browser context opened.',
     'task.workflow_started': 'Running the browser workflow.',
     'task.account_saved': 'Confirmed account saved.',
+    'task.weverse.identity_ready': 'Generated account identity prepared securely.',
+    'task.weverse.overseas_signin_allowed': 'Block Overseas Logins turned off and checked.',
+    'task.weverse.signup_ready': 'Weverse signup form filled.',
+    'task.weverse.otp_requested': 'Verification email requested for the generated account email.',
+    'task.weverse.otp_received': 'Matching OTP received from the configured inbox.',
+    'task.weverse.email_verified': 'Weverse accepted the verification code.',
+    'task.weverse.consent_ready': 'All signup terms selected using Agree to All.',
+    'task.weverse.signup_confirmed': 'Weverse confirmed account creation.',
+    'task.weverse.authenticated': 'The new account session passed token validation.',
+    'task.weverse.session_unverified':
+      'Account creation confirmed; browser authentication was not confirmed.',
+    'task.session_unavailable': 'Account saved without a verified session snapshot.',
     'task.session_saved': 'Browser session saved.',
     'task.succeeded': 'Task completed successfully.',
     'task.retry_scheduled': 'A safe automatic retry was scheduled.',

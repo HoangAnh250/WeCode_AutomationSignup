@@ -20,6 +20,7 @@ import type {
   ProfileLease,
   ProxyLease,
   BrowserWorkflowContext,
+  WorkflowResult,
 } from './contracts.js';
 import { bounded } from './async.js';
 export interface EngineDependencies {
@@ -71,6 +72,45 @@ export class WorkerExecutor implements AutomationExecutor {
     await taskEvent(d.db, 'task.workflow_check', execution.taskId, execution.runId);
     const workflow = d.workflows.get(task.workflow);
     await taskEvent(d.db, 'task.workflow_available', execution.taskId, execution.runId);
+    const persist = async (
+      result: WorkflowResult,
+      profile?: ProfileLease,
+      browser?: BrowserLease,
+    ) => {
+      const current = await d.db.taskRun.findUniqueOrThrow({ where: { id: execution.runId } });
+      if (current.leaseToken !== execution.leaseToken || current.status !== 'RUNNING')
+        throw new AppError(
+          'WORKFLOW_LEASE_LOST',
+          'Execution lost ownership before saving its result.',
+          409,
+        );
+      if (current.outcome === 'CREATED') return;
+      const account = accountCreateSchema.parse({
+        ...result.account,
+        taskRunId: execution.runId,
+        proxyUsed: proxy?.proxy.server,
+      });
+      const saved = await d.accounts.create(account, execution.leaseToken);
+      await taskEvent(d.db, 'task.account_saved', execution.taskId, execution.runId);
+      if (profile && browser && result.sessionDisposition !== 'skip') {
+        await d.sessions.save(
+          profile,
+          browser.context,
+          browser.version,
+          saved.id,
+          result.sessionExpiresAt,
+        );
+        await taskEvent(d.db, 'task.session_saved', execution.taskId, execution.runId);
+      } else
+        await taskEvent(
+          d.db,
+          'task.session_unavailable',
+          execution.taskId,
+          execution.runId,
+          {},
+          'warn',
+        );
+    };
     const config = taskConfigSchema.parse(execution.config);
     const options = browserTaskSchema.parse(config.browser ?? {});
     // A single run has a single business-commit fence. Batch orchestration creates child tasks.
@@ -108,6 +148,9 @@ export class WorkerExecutor implements AutomationExecutor {
     };
     const guarded: ExecutionContext = {
       ...execution,
+      get checkpoint() {
+        return execution.checkpoint;
+      },
       signal: controller.signal,
       assertCanContinue: check,
       saveCheckpoint: async (value) => {
@@ -237,6 +280,7 @@ export class WorkerExecutor implements AutomationExecutor {
       const state = snapshot?.state ?? (await d.storage.load(profile));
       browser = await d.browsers.acquire({
         mode: profile.mode,
+        headless: options.headless,
         directory: profile.mode === 'persistent' ? await d.profiles.directory(profile) : undefined,
         proxy: proxy?.proxy,
         state,
@@ -291,27 +335,8 @@ export class WorkerExecutor implements AutomationExecutor {
       try {
         if (controller.signal.aborted) onStop();
         const result = await Promise.race([work, stopped]);
-        await check();
-        const account = accountCreateSchema.parse({
-          ...result.account,
-          taskRunId: execution.runId,
-          proxyUsed: proxy?.proxy.server,
-        });
-        const saved = await d.accounts.create(account, execution.leaseToken);
-        await taskEvent(d.db, 'task.account_saved', execution.taskId, execution.runId);
-        await d.sessions.save(
-          profile,
-          browser.context,
-          browser.version,
-          saved.id,
-          result.sessionExpiresAt,
-        );
-        await taskEvent(d.db, 'task.session_saved', execution.taskId, execution.runId);
-        await guarded.saveCheckpoint({
-          accountId: saved.id,
-          profileId: profile.id,
-          stage: 'account-saved',
-        });
+        await persist(result, profile, browser);
+        await guarded.saveCheckpoint({ profileId: profile.id, stage: 'account-saved' });
         completed = true;
         d.logger.info(
           { event: 'automation.completed', runId: execution.runId, profileId: profile.id },
@@ -341,6 +366,16 @@ export class WorkerExecutor implements AutomationExecutor {
         }
       }
     } catch (error) {
+      if (error instanceof AppError && error.code === 'BROWSER_CLOSE_UNCONFIRMED')
+        quarantine = true;
+      if (workflow.recover) {
+        const confirmed = await workflow.recover(execution);
+        if (confirmed) {
+          await persist(confirmed);
+          completed = true;
+          return;
+        }
+      }
       if (error instanceof AppError && error.code === 'BROWSER_CLOSE_UNCONFIRMED')
         quarantine = true;
       if (controller.signal.aborted && stopReason) throw stopReason;

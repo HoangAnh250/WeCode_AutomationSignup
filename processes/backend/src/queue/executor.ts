@@ -51,7 +51,7 @@ export function executionContext(
       throw conflict('Execution no longer owns this task.');
     if (task.desiredState === 'paused') throw new PauseSignal();
   };
-  return {
+  const current: ExecutionContext = {
     leaseToken,
     runId,
     taskId,
@@ -61,11 +61,23 @@ export function executionContext(
     assertCanContinue,
     async saveCheckpoint(value) {
       await assertCanContinue();
-      const updated = await db.taskRun.updateMany({
-        where: { id: runId, leaseToken, status: 'RUNNING' },
-        data: { checkpoint: json(value), heartbeatAt: new Date() },
+      const next = await db.$transaction(async (tx) => {
+        await tx.$queryRaw`SELECT id FROM task_runs WHERE id=${runId}::uuid FOR UPDATE`;
+        const run = await tx.taskRun.findUnique({ where: { id: runId } });
+        if (!run || run.leaseToken !== leaseToken || run.status !== 'RUNNING')
+          throw conflict('Execution lease was lost.');
+        const previous =
+          run.checkpoint && typeof run.checkpoint === 'object' && !Array.isArray(run.checkpoint)
+            ? run.checkpoint
+            : {};
+        const merged = { ...previous, ...value };
+        await tx.taskRun.update({
+          where: { id: runId },
+          data: { checkpoint: json(merged), heartbeatAt: new Date() },
+        });
+        return merged;
       });
-      if (!updated.count) throw conflict('Execution lease was lost.');
+      current.checkpoint = next;
     },
     async beforeExternalMutation() {
       await assertCanContinue();
@@ -77,4 +89,5 @@ export function executionContext(
         throw conflict('An account creation action is already pending or completed.');
     },
   };
+  return current;
 }

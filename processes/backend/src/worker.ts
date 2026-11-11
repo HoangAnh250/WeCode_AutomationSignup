@@ -1,13 +1,23 @@
 import { loadConfig } from './core/config.js';
 import { createDatabase } from './infrastructure/database.js';
 import { createLogger } from './infrastructure/logger.js';
-import { createEngine } from './automation/create-engine.js';
+import { createProductionEngine } from './automation/production-engine.js';
 import { startTaskWorker } from './queue/workers.js';
 const config = loadConfig();
 const db = createDatabase(config.DATABASE_URL);
 const logger = createLogger(config.LOG_LEVEL);
 await db.$connect();
-const engine = createEngine(config, db, logger);
+try {
+  await db.workflowState.findFirst({ select: { taskId: true } });
+} catch {
+  logger.error(
+    { event: 'worker.schema_unavailable' },
+    'Workflow storage is unavailable. Run npm run db:migrate before starting the worker.',
+  );
+  await db.$disconnect();
+  process.exit(1);
+}
+const engine = createProductionEngine(config, db, logger);
 const runtime = startTaskWorker(db, config, logger, engine.executor);
 logger.info(
   { event: 'worker.started', automationAvailable: true, workflows: engine.workflows.keys },

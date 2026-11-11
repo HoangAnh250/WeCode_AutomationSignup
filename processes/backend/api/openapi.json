@@ -170,6 +170,57 @@
                     "type": "string",
                     "format": "uuid",
                     "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  },
+                  "headless": {
+                    "type": "boolean"
+                  }
+                },
+                "additionalProperties": false
+              },
+              "batch": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  },
+                  "index": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 1000
+                  },
+                  "size": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 1000
+                  },
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 120
+                  }
+                },
+                "required": [
+                  "id",
+                  "index",
+                  "size",
+                  "name"
+                ],
+                "additionalProperties": false
+              },
+              "weverse": {
+                "type": "object",
+                "properties": {
+                  "language": {
+                    "default": "en",
+                    "type": "string",
+                    "const": "en"
+                  },
+                  "timeZone": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 80
                   }
                 },
                 "additionalProperties": false
@@ -189,6 +240,204 @@
         "required": [
           "name",
           "config"
+        ],
+        "additionalProperties": false
+      },
+      "TaskBatchCreate": {
+        "type": "object",
+        "properties": {
+          "batchId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "size": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1000
+          },
+          "task": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 120
+              },
+              "config": {
+                "type": "object",
+                "properties": {
+                  "domain": {
+                    "type": "string",
+                    "maxLength": 253,
+                    "pattern": "^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z]{2,63}$"
+                  },
+                  "pattern": {
+                    "default": "[random][digits]",
+                    "type": "string",
+                    "enum": [
+                      "[random][digits]",
+                      "[firstName][digits]",
+                      "[word][digits]"
+                    ]
+                  },
+                  "count": {
+                    "default": 1,
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 10000
+                  },
+                  "password": {
+                    "default": {
+                      "length": 20,
+                      "uppercase": true,
+                      "lowercase": true,
+                      "numbers": true,
+                      "special": true
+                    },
+                    "type": "object",
+                    "properties": {
+                      "length": {
+                        "default": 20,
+                        "type": "integer",
+                        "minimum": 12,
+                        "maximum": 128
+                      },
+                      "uppercase": {
+                        "default": true,
+                        "type": "boolean"
+                      },
+                      "lowercase": {
+                        "default": true,
+                        "type": "boolean"
+                      },
+                      "numbers": {
+                        "default": true,
+                        "type": "boolean"
+                      },
+                      "special": {
+                        "default": true,
+                        "type": "boolean"
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  "proxyId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  },
+                  "browser": {
+                    "type": "object",
+                    "properties": {
+                      "profileId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                      },
+                      "profileMode": {
+                        "default": "isolated",
+                        "type": "string",
+                        "enum": [
+                          "isolated",
+                          "persistent"
+                        ]
+                      },
+                      "proxyMode": {
+                        "default": "direct",
+                        "type": "string",
+                        "enum": [
+                          "direct",
+                          "auto",
+                          "fixed"
+                        ]
+                      },
+                      "rotateOnFailure": {
+                        "default": false,
+                        "type": "boolean"
+                      },
+                      "sessionId": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                      },
+                      "headless": {
+                        "type": "boolean"
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  "batch": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                      },
+                      "index": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 1000
+                      },
+                      "size": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 1000
+                      },
+                      "name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 120
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "index",
+                      "size",
+                      "name"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "weverse": {
+                    "type": "object",
+                    "properties": {
+                      "language": {
+                        "default": "en",
+                        "type": "string",
+                        "const": "en"
+                      },
+                      "timeZone": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 80
+                      }
+                    },
+                    "additionalProperties": false
+                  }
+                },
+                "required": [
+                  "domain"
+                ],
+                "additionalProperties": false
+              },
+              "emailConfigId": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              }
+            },
+            "required": [
+              "name",
+              "config"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "batchId",
+          "size",
+          "task"
         ],
         "additionalProperties": false
       },
@@ -296,6 +545,57 @@
                     "type": "string",
                     "format": "uuid",
                     "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  },
+                  "headless": {
+                    "type": "boolean"
+                  }
+                },
+                "additionalProperties": false
+              },
+              "batch": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  },
+                  "index": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 1000
+                  },
+                  "size": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 1000
+                  },
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 120
+                  }
+                },
+                "required": [
+                  "id",
+                  "index",
+                  "size",
+                  "name"
+                ],
+                "additionalProperties": false
+              },
+              "weverse": {
+                "type": "object",
+                "properties": {
+                  "language": {
+                    "default": "en",
+                    "type": "string",
+                    "const": "en"
+                  },
+                  "timeZone": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 80
                   }
                 },
                 "additionalProperties": false
@@ -879,6 +1179,50 @@
         },
         "responses": {
           "200": {
+            "description": "Operation completed."
+          },
+          "401": {
+            "description": "Missing or invalid service token."
+          },
+          "403": {
+            "description": "Browser-origin request rejected."
+          },
+          "409": {
+            "description": "Version conflict, duplicate identity, or unsafe transition."
+          },
+          "422": {
+            "description": "Input validation failed; fields returned without input values."
+          },
+          "500": {
+            "description": "Sanitized internal error."
+          },
+          "502": {
+            "description": "Mailbox or network dependency unavailable."
+          }
+        }
+      }
+    },
+    "/api/v1/tasks/batch": {
+      "post": {
+        "summary": "Create an idempotent batch of isolated one-account task rows",
+        "security": [
+          {
+            "desktopToken": []
+          }
+        ],
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TaskBatchCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
             "description": "Operation completed."
           },
           "401": {
@@ -2154,6 +2498,50 @@
         "responses": {
           "201": {
             "description": "Operation completed."
+          },
+          "401": {
+            "description": "Missing or invalid service token."
+          },
+          "403": {
+            "description": "Browser-origin request rejected."
+          },
+          "409": {
+            "description": "Version conflict, duplicate identity, or unsafe transition."
+          },
+          "422": {
+            "description": "Input validation failed; fields returned without input values."
+          },
+          "500": {
+            "description": "Sanitized internal error."
+          },
+          "502": {
+            "description": "Mailbox or network dependency unavailable."
+          }
+        }
+      }
+    },
+    "/api/v1/email-configs/{id}/app-password": {
+      "get": {
+        "summary": "Load saved IMAP App Password for the local settings form",
+        "security": [
+          {
+            "desktopToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sensitive response; Cache-Control: no-store."
           },
           "401": {
             "description": "Missing or invalid service token."

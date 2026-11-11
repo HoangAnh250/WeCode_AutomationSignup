@@ -21,6 +21,11 @@ export class EmailManager {
   list() {
     return this.repo.list();
   }
+  async appPassword(id: string) {
+    const record = await this.repo.get(id);
+    if (!record) throw notFound('Mailbox');
+    return this.cipher.open(record.appPasswordCipher, `mailbox:${id}`);
+  }
   async create(input: z.infer<typeof emailConfigSchema>) {
     const id = randomUUID();
     const { appPassword, ...fields } = input;
@@ -134,6 +139,14 @@ export class EmailManager {
     });
     const { codeCipher, ...safe } = request;
     return safe;
+  }
+  async limitVerificationExpiry(id: string, expiresAt: Date) {
+    if (!Number.isFinite(expiresAt.getTime()) || expiresAt <= new Date())
+      throw new AppError('OTP_TIMEOUT', 'Remote verification has expired.', 422);
+    await this.repo.db.verificationRequest.updateMany({
+      where: { id, expiresAt: { gt: expiresAt } },
+      data: { expiresAt },
+    });
   }
   async verifications(emailConfigId: string) {
     if (!(await this.repo.get(emailConfigId))) throw notFound('Mailbox');

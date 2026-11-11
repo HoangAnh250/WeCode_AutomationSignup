@@ -10,3 +10,6 @@ export { createEngine } from './create-engine.js';
 export type * from './contracts.js';
 
 export { EmailVerificationCoordinator } from './EmailVerificationCoordinator.js';
+
+export { WeverseAdapter } from './WeverseAdapter.js';
+export { createProductionEngine } from './production-engine.js';

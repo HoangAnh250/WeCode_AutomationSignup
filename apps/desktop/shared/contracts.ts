@@ -12,7 +12,9 @@ const task = z
   .object({
     name: z.string().trim().min(1).max(120),
     workflow: z.string().max(80),
-    total: z.number().int().min(1).max(10000),
+    total: z.number().int().min(1).max(1000),
+    creationId: z.string().uuid().optional(),
+    showBrowser: z.boolean().optional(),
     proxy: short,
     profile: short,
   })
@@ -101,6 +103,7 @@ export const args = {
       .strict()
       .optional(),
   ]),
+  getEmailAppPassword: z.tuple([id]),
   getEmailVerifications: z.tuple([]),
   testEmail: z.tuple([]),
   savePreferences: z.tuple([preferencesSchema]),

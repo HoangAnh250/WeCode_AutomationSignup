@@ -25,6 +25,7 @@ const client: DesktopMethods & {
   deleteProfile: (id) => call("deleteProfile", id),
   saveEmail: (address, password, options) =>
     call("saveEmail", address, password, options),
+  getEmailAppPassword: (id) => call("getEmailAppPassword", id),
   getEmailVerifications: () => call("getEmailVerifications"),
   testEmail: () => call("testEmail"),
   savePreferences: (input) => call("savePreferences", input),
@@ -48,7 +49,19 @@ const client: DesktopMethods & {
     return () => ipcRenderer.removeListener("wecode:event", callback);
   },
 };
+const versionArgument = process.argv.find((argument) =>
+  argument.startsWith("--wecode-app-version="),
+);
+const version = versionArgument?.slice("--wecode-app-version=".length);
+const appVersion =
+  version && /^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/.test(version)
+    ? version
+    : undefined;
 contextBridge.exposeInMainWorld(
   "wecode",
-  Object.freeze({ protocolVersion: 1, client: Object.freeze(client) }),
+  Object.freeze({
+    protocolVersion: 1,
+    appVersion,
+    client: Object.freeze(client),
+  }),
 );

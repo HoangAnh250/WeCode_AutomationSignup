@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { useCommand } from '@/hooks/useWorkspace';
 import { client } from '@/ipc/client';
+import { useEmailCredential } from '@/hooks/useEmailCredential';
 import type { WorkspaceData } from '@/types/domain';
 import { EmailFlow, exampleAccountEmail } from './EmailFlow';
 export function EmailPage({ data }: { data: WorkspaceData }) {
@@ -16,7 +17,13 @@ export function EmailPage({ data }: { data: WorkspaceData }) {
   const [host, setHost] = useState(data.email.host ?? 'imap.gmail.com');
   const [port, setPort] = useState(data.email.port ?? 993);
   const [mailbox, setMailbox] = useState(data.email.mailbox ?? 'INBOX');
-  const [password, setPassword] = useState('');
+  const credential = useEmailCredential(data.email.id);
+  const { password, setPassword } = credential;
+  const normalizePassword = (value: string) =>
+    host.trim().toLowerCase() === 'imap.gmail.com' ? value.replace(/\s/g, '') : value;
+  const passwordChanged =
+    Boolean(password.trim()) &&
+    normalizePassword(password) !== normalizePassword(credential.savedPassword);
   const [visible, setVisible] = useState(false);
   const [error, setError] = useState('');
   useEffect(() => {
@@ -39,7 +46,7 @@ export function EmailPage({ data }: { data: WorkspaceData }) {
     host.trim() !== (data.email.host ?? 'imap.gmail.com') ||
     port !== (data.email.port ?? 993) ||
     mailbox.trim() !== (data.email.mailbox ?? 'INBOX') ||
-    Boolean(password);
+    passwordChanged;
   const preview = useMemo(() => exampleAccountEmail(domain.trim()), [domain]);
   const tracking = useQuery({
     queryKey: ['email-verifications', data.email.id ?? data.email.address],
@@ -56,14 +63,15 @@ export function EmailPage({ data }: { data: WorkspaceData }) {
       throw new Error('Enter an App Password for the OTP inbox.');
     if (!Number.isInteger(port) || port < 1 || port > 65535)
       throw new Error('Enter a valid IMAP port.');
-    await client.saveEmail(address.trim(), password.trim() || undefined, {
+    await client.saveEmail(address.trim(), passwordChanged ? password.trim() : undefined, {
       accountDomain: domain.trim().toLowerCase(),
       host: host.trim(),
       port,
       mailbox: mailbox.trim(),
     });
-    setPassword('');
+    credential.markSaved(password.trim() || credential.savedPassword);
     setVisible(false);
+    if (!password.trim() && !credential.savedPassword && data.email.configured) credential.reload();
   }, 'Account domain and OTP inbox settings saved.');
   const test = useCommand(
     () => client.testEmail(),
@@ -158,7 +166,7 @@ export function EmailPage({ data }: { data: WorkspaceData }) {
                 label="App Password"
                 hint={
                   data.email.configured
-                    ? 'Leave blank to retain the stored inbox credential.'
+                    ? 'Saved securely and reloaded when you reopen this page. Use Show Password to view it.'
                     : 'Gmail App Password used only to sign in to the OTP inbox through IMAP.'
                 }
               >
@@ -167,26 +175,53 @@ export function EmailPage({ data }: { data: WorkspaceData }) {
                     <Input
                       id={id}
                       type={visible ? 'text' : 'password'}
-                      autoComplete="new-password"
+                      autoComplete="off"
+                      spellCheck={false}
+                      autoCapitalize="none"
+                      disabled={credential.loading || save.isPending}
+                      aria-busy={credential.loading}
                       value={password}
                       onChange={(event) => setPassword(event.target.value)}
                       placeholder={
                         data.email.configured
-                          ? 'Leave blank to keep existing password'
+                          ? credential.loading
+                            ? 'Loading saved password...'
+                            : 'Enter a replacement or leave blank to keep saved password'
                           : 'Enter your Gmail App Password'
                       }
                     />
                     <Button
-                      size="icon"
                       variant="ghost"
+                      disabled={credential.loading || !password}
+                      aria-pressed={visible}
                       aria-label={visible ? 'Hide App Password' : 'Show App Password'}
                       onClick={() => setVisible(!visible)}
                     >
-                      {visible ? <EyeOff size={16} /> : <Eye size={16} />}
+                      {visible ? (
+                        <EyeOff size={16} aria-hidden="true" />
+                      ) : (
+                        <Eye size={16} aria-hidden="true" />
+                      )}
+                      {visible ? 'Hide Password' : 'Show Password'}
                     </Button>
                   </div>
                 )}
               </Field>
+              {credential.loading && (
+                <p className="small-text muted" role="status">
+                  Loading saved App Password...
+                </p>
+              )}
+              {credential.error && (
+                <div>
+                  <p role="alert" className="form-error">
+                    {credential.error}
+                  </p>
+                  <Button onClick={credential.reload} disabled={save.isPending}>
+                    Reload saved password
+                  </Button>
+                </div>
+              )}
               <details className="imap-details">
                 <summary>Advanced IMAP settings</summary>
                 <div className="form-stack">
@@ -247,13 +282,23 @@ export function EmailPage({ data }: { data: WorkspaceData }) {
             </div>
             <div className="settings-footer">
               <Button
-                disabled={!data.email.configured || inboxDirty || test.isPending || save.isPending}
+                disabled={
+                  !data.email.configured ||
+                  inboxDirty ||
+                  credential.loading ||
+                  test.isPending ||
+                  save.isPending
+                }
                 onClick={() => test.mutate(undefined)}
               >
                 <RefreshCw size={15} />
                 {test.isPending ? 'Testing...' : 'Test connection'}
               </Button>
-              <Button type="submit" variant="default" disabled={save.isPending}>
+              <Button
+                type="submit"
+                variant="default"
+                disabled={save.isPending || credential.loading}
+              >
                 <Save size={15} />
                 {save.isPending ? 'Saving...' : 'Save connection'}
               </Button>

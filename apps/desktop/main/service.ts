@@ -197,14 +197,17 @@ export class DesktopService implements DesktopMethods {
           health:
             p.status === "healthy"
               ? "healthy"
-              : p.status === "unhealthy"
+              : ["unhealthy", "unreachable"].includes(p.status)
                 ? "unreachable"
                 : "unknown",
-          latency: null,
-          assigned: profiles.filter(
-            (f) => f.state === "leased" && f.assignedProxyId === p.id,
-          ).length,
-          hasCredentials: false,
+          latency: p.latencyMs ?? null,
+          assigned:
+            p.activeAssignments ??
+            profiles.filter(
+              (f) => f.state === "leased" && f.assignedProxyId === p.id,
+            ).length,
+          hasCredentials: Boolean(p.hasAuthentication),
+          revision: p.version ?? 1,
         })),
         profiles: profiles.map((p) => ({
           id: p.id,
@@ -401,6 +404,23 @@ export class DesktopService implements DesktopMethods {
   };
   checkProxy = async (id: string) => {
     await this.api.request(`/api/v1/proxies/${id}/check`, "POST");
+    this.notify();
+  };
+  updateProxy = async (
+    id: string,
+    input: Parameters<DesktopMethods["updateProxy"]>[1],
+    revision: number,
+  ) => {
+    await this.api.request(`/api/v1/proxies/${id}`, "PATCH", {
+      ...input,
+      version: revision,
+    });
+    this.notify();
+  };
+  deleteProxy = async (id: string, revision: number) => {
+    await this.api.request(`/api/v1/proxies/${id}`, "DELETE", {
+      version: revision,
+    });
     this.notify();
   };
   createProfile = async (name: string, proxy: string) => {

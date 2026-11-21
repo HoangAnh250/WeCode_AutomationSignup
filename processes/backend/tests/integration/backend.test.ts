@@ -57,6 +57,8 @@ describe.skipIf(!enabled)('PostgreSQL + Redis + Express integration', () => {
       await tx.outboxEvent.deleteMany();
       await tx.task.updateMany({ data: { currentRunId: null } });
       await tx.session.deleteMany();
+      await tx.proxyAssignment.deleteMany();
+      await tx.browserProfile.deleteMany();
       await tx.account.deleteMany();
       await tx.taskRun.deleteMany();
       await tx.task.deleteMany();
@@ -562,6 +564,129 @@ describe.skipIf(!enabled)('PostgreSQL + Redis + Express integration', () => {
     expect(workbook.getWorksheet('Accounts')?.getCell('A2').value).toBe('alex123@nam.fit');
     expect(workbook.getWorksheet('Accounts')?.getCell('C2').value).toBe('private-account-secret');
     expect(workbook.getWorksheet('Accounts')?.rowCount).toBe(2);
+  });
+  it('edits proxy credentials explicitly, fences stale changes and soft-deletes without losing history', async () => {
+    await c.proxies.import('editable.test:8080:operator:fixture-old-secret', 'txt', false);
+    let list = await request(app).get('/api/v1/proxies').set('Authorization', authorization);
+    const proxy = list.body.items[0];
+    expect(proxy.hasAuthentication).toBe(true);
+    expect(JSON.stringify(list.body)).not.toMatch(/Cipher|fixture-old-secret/);
+    const stored = await c.db.proxy.findUniqueOrThrow({ where: { id: proxy.id } });
+    const edit = await request(app)
+      .patch(`/api/v1/proxies/${proxy.id}`)
+      .set('Authorization', authorization)
+      .send({ version: proxy.version, host: 'changed.test', authMode: 'keep' });
+    expect(edit.status).toBe(200);
+    expect(edit.body.status).toBe('unknown');
+    expect((await c.db.proxy.findUniqueOrThrow({ where: { id: proxy.id } })).passwordCipher).toBe(
+      stored.passwordCipher,
+    );
+    expect(
+      (
+        await request(app)
+          .delete(`/api/v1/proxies/${proxy.id}`)
+          .set('Authorization', authorization)
+          .send({ version: proxy.version })
+      ).status,
+    ).toBe(409);
+    const replaced = await request(app)
+      .patch(`/api/v1/proxies/${proxy.id}`)
+      .set('Authorization', authorization)
+      .send({
+        version: edit.body.version,
+        authMode: 'replace',
+        username: 'new-operator',
+        password: 'fixture-new-secret',
+      });
+    expect(replaced.status).toBe(200);
+    expect(JSON.stringify(replaced.body)).not.toContain('fixture-new-secret');
+    expect(
+      (await c.db.proxy.findUniqueOrThrow({ where: { id: proxy.id } })).passwordCipher,
+    ).not.toBe(stored.passwordCipher);
+    await c.proxies.check(proxy.id);
+    const checked = await c.db.proxy.findUniqueOrThrow({ where: { id: proxy.id } });
+    const removed = await request(app)
+      .delete(`/api/v1/proxies/${proxy.id}`)
+      .set('Authorization', authorization)
+      .send({ version: checked.version });
+    expect(removed.status).toBe(204);
+    list = await request(app).get('/api/v1/proxies').set('Authorization', authorization);
+    expect(list.body.total).toBe(0);
+    expect((await c.proxies.statistics()).total).toBe(0);
+    expect(await c.db.proxyHealth.count({ where: { proxyId: proxy.id } })).toBe(1);
+    expect(
+      (await c.db.proxy.findUniqueOrThrow({ where: { id: proxy.id } })).deletedAt,
+    ).not.toBeNull();
+    await expect(c.proxies.setEnabled(proxy.id, true)).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    expect(
+      (await c.proxies.import('changed.test:8080:new-operator:fixture-new-secret', 'txt', false))
+        .imported,
+    ).toBe(1);
+  });
+  it('refuses proxy changes when a task or browser lease depends on it', async () => {
+    await c.proxies.import('protected.test:8080', 'txt', false);
+    const proxy = await c.db.proxy.findFirstOrThrow();
+    const template = await task();
+    const fixed = await c.tasks.update(
+      template.id,
+      {
+        name: template.name,
+        emailConfigId: template.emailConfigId,
+        config: {
+          ...template.config,
+          proxyId: proxy.id,
+          browser: { proxyMode: 'fixed', profileMode: 'isolated', rotateOnFailure: false },
+        },
+      },
+      template.version,
+    );
+    await expect(c.proxies.delete(proxy.id, proxy.version)).rejects.toMatchObject({
+      code: 'PROXY_IN_USE',
+    });
+    await expect(
+      c.proxies.update(proxy.id, { version: proxy.version, port: 9000, authMode: 'keep' }),
+    ).rejects.toMatchObject({ code: 'PROXY_IN_USE' });
+    await c.tasks.delete(fixed.id, fixed.version);
+    const profile = await c.db.browserProfile.create({
+      data: {
+        installationId: c.config.INSTALLATION_ID,
+        name: 'saved-proxy-fixture',
+        assignedProxyId: proxy.id,
+        stateVersion: 1,
+      },
+    });
+    await expect(
+      c.proxies.update(proxy.id, { version: proxy.version, port: 9000, authMode: 'keep' }),
+    ).rejects.toMatchObject({ code: 'PROXY_HAS_SAVED_STATE' });
+    await c.db.browserProfile.update({
+      where: { id: profile.id },
+      data: { deletedAt: new Date() },
+    });
+    await c.proxies.delete(proxy.id, proxy.version);
+  });
+  it('rejects duplicate edited proxy endpoints and mismatched credential modes', async () => {
+    await c.proxies.import('one.test:8080\ntwo.test:8080', 'txt', false);
+    const proxy = await c.db.proxy.findFirstOrThrow({ where: { host: 'two.test' } });
+    await expect(
+      c.proxies.update(proxy.id, { version: proxy.version, host: 'one.test', authMode: 'keep' }),
+    ).rejects.toMatchObject({ code: 'PROXY_DUPLICATE' });
+    expect(
+      (
+        await request(app)
+          .patch(`/api/v1/proxies/${proxy.id}`)
+          .set('Authorization', authorization)
+          .send({ version: proxy.version, authMode: 'replace', username: 'only-user' })
+      ).status,
+    ).toBe(422);
+    expect(
+      (
+        await request(app)
+          .patch(`/api/v1/proxies/${proxy.id}`)
+          .set('Authorization', authorization)
+          .send({ version: proxy.version, authMode: 'keep', password: 'should-not-be-used' })
+      ).status,
+    ).toBe(422);
+    expect((await c.db.proxy.findUniqueOrThrow({ where: { id: proxy.id } })).host).toBe('two.test');
   });
   it('imports proxy formats, preserves secrets, rotates healthy proxies and records usage', async () => {
     const result = await c.proxies.import(

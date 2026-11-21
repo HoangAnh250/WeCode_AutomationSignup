@@ -1,6 +1,8 @@
 import { useRef, useState } from 'react';
 import {
   Upload,
+  Pencil,
+  Trash2,
   ShieldCheck,
   Globe,
   Activity,
@@ -18,8 +20,64 @@ import { Select } from '@/components/ui/input';
 import { parseProxies, type ImportPreview } from '@/lib/proxy-parser';
 import { client } from '@/ipc/client';
 import { useCommand } from '@/hooks/useWorkspace';
-import type { Proxy, WorkspaceData } from '@/types/domain';
+import { ProxyEditor } from '@/components/proxies/ProxyEditor';
+import { ConfirmDialog } from '@/components/shared/ConfirmDialog';
+import { useNotifications } from '@/stores/notification.store';
+import type { Proxy, ProxyEditInput, WorkspaceData } from '@/types/domain';
 export function ProxiesPage({ data }: { data: WorkspaceData }) {
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [editing, setEditing] = useState<Proxy[] | null>(null);
+  const [deleting, setDeleting] = useState<{ rows: Proxy[]; skipped: number } | null>(null);
+  const [pageSize, setPageSize] = useState(10);
+  const [progress, setProgress] = useState('');
+  const [report, setReport] = useState('');
+  const notify = useNotifications((state) => state.push);
+  const runBatch = async (
+    proxies: Proxy[],
+    operation: (proxy: Proxy) => Promise<void>,
+    verb: string,
+    skipped = 0,
+  ) => {
+    const succeeded: string[] = [];
+    const failed: string[] = [];
+    for (const proxy of proxies) {
+      try {
+        await operation(proxy);
+        succeeded.push(proxy.id);
+      } catch (error) {
+        failed.push(
+          `${proxy.host}:${proxy.port}: ${error instanceof Error ? error.message : 'Command could not be confirmed.'}`,
+        );
+      }
+      setProgress(`${succeeded.length + failed.length} / ${proxies.length} processed`);
+    }
+    const summary = `${verb}: ${succeeded.length} confirmed, ${failed.length} not confirmed, ${skipped} in-use proxies skipped.`;
+    setReport(
+      summary +
+        (failed.length ? ` Refresh before retrying. ${failed.slice(0, 3).join(' / ')}` : ''),
+    );
+    notify(summary, failed.length ? 'error' : undefined);
+    setSelected((old) => new Set([...old].filter((id) => !succeeded.includes(id))));
+  };
+  const editCommand = useCommand(async (input: ProxyEditInput) => {
+    if (!editing) return;
+    await runBatch(
+      editing,
+      (proxy) => client.updateProxy(proxy.id, input, proxy.revision ?? 1),
+      'Edit',
+    );
+    setEditing(null);
+  });
+  const deleteCommand = useCommand(async () => {
+    if (!deleting) return;
+    await runBatch(
+      deleting.rows,
+      (proxy) => client.deleteProxy(proxy.id, proxy.revision ?? 1),
+      'Delete',
+      deleting.skipped,
+    );
+    setDeleting(null);
+  });
   const [search, setSearch] = useState('');
   const [health, setHealth] = useState('all');
   const [open, setOpen] = useState(false);
@@ -42,9 +100,59 @@ export function ProxiesPage({ data }: { data: WorkspaceData }) {
   const rows = data.proxies.filter(
     (p) =>
       (health === 'all' || p.health === health) &&
-      `${p.host} ${p.country} ${p.protocol}`.toLowerCase().includes(search.toLowerCase()),
+      `${p.host}:${p.port} ${p.country} ${p.protocol}`.toLowerCase().includes(search.toLowerCase()),
   );
+  const selectedRows = rows.filter((proxy) => selected.has(proxy.id));
+  const editable = selectedRows.filter((proxy) => !proxy.assigned);
+  const busy =
+    editCommand.isPending || deleteCommand.isPending || upload.isPending || check.isPending;
+  const requestDelete = (proxies: Proxy[]) => {
+    setProgress('');
+    setDeleting({
+      rows: proxies.filter((proxy) => !proxy.assigned),
+      skipped: proxies.filter((proxy) => proxy.assigned).length,
+    });
+  };
   const columns: Column<Proxy>[] = [
+    {
+      key: 'select',
+      label: (
+        <input
+          type="checkbox"
+          aria-label="Select all filtered proxies"
+          checked={!!rows.length && selectedRows.length === rows.length}
+          disabled={busy || !rows.length}
+          ref={(node) => {
+            if (node)
+              node.indeterminate = selectedRows.length > 0 && selectedRows.length < rows.length;
+          }}
+          onChange={(event) =>
+            setSelected(new Set(event.target.checked ? rows.map((proxy) => proxy.id) : []))
+          }
+        />
+      ),
+      render: (proxy) => (
+        <input
+          type="checkbox"
+          aria-label={`Select ${proxy.host}:${proxy.port}`}
+          checked={selected.has(proxy.id)}
+          disabled={busy}
+          onChange={() =>
+            setSelected((old) => {
+              const next = new Set(old);
+              if (next.has(proxy.id)) next.delete(proxy.id);
+              else next.add(proxy.id);
+              return next;
+            })
+          }
+        />
+      ),
+    },
+    {
+      key: 'index',
+      label: '#',
+      render: (_proxy, index) => <span className="mono">{index + 1}</span>,
+    },
     {
       key: 'endpoint',
       label: 'Endpoint',
@@ -87,16 +195,37 @@ export function ProxiesPage({ data }: { data: WorkspaceData }) {
     {
       key: 'actions',
       label: 'Actions',
-      render: (p) => (
-        <Button
-          size="sm"
-          variant="ghost"
-          disabled={check.isPending}
-          onClick={() => check.mutate(p.id)}
-        >
-          <RefreshCw size={14} />
-          Check
-        </Button>
+      className: 'task-actions-column',
+      render: (proxy) => (
+        <div className="row-actions">
+          <Button size="sm" variant="ghost" disabled={busy} onClick={() => check.mutate(proxy.id)}>
+            <RefreshCw size={14} />
+            Check
+          </Button>
+          <Button
+            size="icon"
+            variant="ghost"
+            aria-label={`Edit ${proxy.host}:${proxy.port}`}
+            title={proxy.assigned ? 'Proxy is in use' : 'Edit proxy'}
+            disabled={busy || proxy.assigned > 0}
+            onClick={() => {
+              setProgress('');
+              setEditing([proxy]);
+            }}
+          >
+            <Pencil size={15} />
+          </Button>
+          <Button
+            size="icon"
+            variant="ghost"
+            aria-label={`Delete ${proxy.host}:${proxy.port}`}
+            title={proxy.assigned ? 'Proxy is in use' : 'Delete proxy'}
+            disabled={busy || proxy.assigned > 0}
+            onClick={() => requestDelete([proxy])}
+          >
+            <Trash2 size={15} />
+          </Button>
+        </div>
       ),
     },
   ];
@@ -106,7 +235,7 @@ export function ProxiesPage({ data }: { data: WorkspaceData }) {
         title="Proxies"
         description="Manage connection pools and keep your workflows connected."
         actions={
-          <Button variant="default" onClick={() => setOpen(true)}>
+          <Button variant="default" disabled={busy} onClick={() => setOpen(true)}>
             <Upload size={16} />
             Import proxies
           </Button>
@@ -151,8 +280,85 @@ export function ProxiesPage({ data }: { data: WorkspaceData }) {
             <option value="unreachable">Unavailable</option>
           </Select>
         </div>
-        <DataTable rows={rows} columns={columns} label="Proxy pool" />
+        <div className="task-selection-toolbar">
+          <div className="row-actions">
+            <span role="status">{selectedRows.length} selected</span>
+            <Button
+              disabled={busy || !selectedRows.length}
+              variant="ghost"
+              onClick={() => setSelected(new Set())}
+            >
+              Clear selection
+            </Button>
+            <Button
+              disabled={busy || !editable.length}
+              onClick={() => {
+                setProgress('');
+                setEditing(editable);
+              }}
+            >
+              <Pencil size={15} />
+              Edit selected
+            </Button>
+            <Button
+              disabled={busy || !editable.length}
+              variant="destructive"
+              onClick={() => requestDelete(selectedRows)}
+            >
+              <Trash2 size={15} />
+              Delete selected
+            </Button>
+          </div>
+          <label className="proxy-page-size">
+            Rows per page{' '}
+            <Select
+              aria-label="Proxies per page"
+              value={pageSize}
+              onChange={(event) => setPageSize(Number(event.target.value))}
+            >
+              {[10, 25, 50, 100].map((size) => (
+                <option key={size} value={size}>
+                  {size}
+                </option>
+              ))}
+            </Select>
+          </label>
+        </div>
+        <p className="task-selection-hint">
+          Select all applies to the filtered list across pages. In-use proxies are skipped; queued
+          or saved bindings are checked before changes.
+        </p>
+        {report && (
+          <p role="status" className="task-bulk-report">
+            {report}
+          </p>
+        )}
+        <DataTable
+          key={`${search}:${health}:${pageSize}`}
+          rows={rows}
+          columns={columns}
+          label="Proxy pool"
+          pageSize={pageSize}
+          numberedPages
+        />
       </div>
+      {editing && (
+        <ProxyEditor
+          proxies={editing}
+          pending={editCommand.isPending}
+          progress={progress}
+          onClose={() => setEditing(null)}
+          onSave={(input) => editCommand.mutateAsync(input).then(() => {})}
+        />
+      )}
+      <ConfirmDialog
+        open={!!deleting}
+        title={deleting?.rows.length === 1 ? 'Delete proxy?' : 'Delete selected proxies?'}
+        description={`${deleting?.rows.length ?? 0} proxies will be removed from the pool. ${deleting?.skipped ?? 0} in-use proxies will be kept. Account and usage history are preserved. ${deleteCommand.isPending ? progress : ''}`}
+        pending={deleteCommand.isPending}
+        onClose={() => setDeleting(null)}
+        onConfirm={() => deleteCommand.mutate(undefined)}
+      />
       <Dialog
         open={open}
         onOpenChange={(v) => !v && !upload.isPending && reset()}

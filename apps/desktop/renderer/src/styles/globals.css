@@ -2292,3 +2292,38 @@ strong {
 .data-table th.task-actions-column {
   z-index: 2;
 }
+
+.page-number-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.pagination .button[aria-current='page'] {
+  color: var(--accent);
+  background: var(--accent-surface);
+}
+.proxy-page-size {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.proxy-page-size .input {
+  width: 80px;
+}
+.proxy-editor-fields {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+.password-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.password-field .input {
+  flex: 1;
+  min-width: 0;
+}

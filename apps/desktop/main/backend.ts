@@ -72,9 +72,19 @@ export class BackendClient {
         if (data.error?.code && /^[A-Z_]{1,80}$/.test(data.error.code))
           code = data.error.code;
       } catch {}
+      const proxyErrors: Record<string, string> = {
+        PROXY_IN_USE:
+          "Proxy is assigned to an active, queued, paused or unresolved task/profile. Stop or unassign it first.",
+        PROXY_HAS_SAVED_STATE:
+          "A saved browser profile uses this proxy. Remove that profile or import a new proxy to change the endpoint.",
+        PROXY_CHANGED:
+          "Proxy changed. Refresh and retry with the latest version.",
+        PROXY_DUPLICATE: "This proxy endpoint and username already exist.",
+      };
       throw new DesktopError(
         code,
-        `Backend rejected the operation (${code}). Refresh the workspace and check its configuration.`,
+        proxyErrors[code] ??
+          `Backend rejected the operation (${code}). Refresh the workspace and check its configuration.`,
       );
     }
     if (response.status === 204) return undefined as T;

@@ -5,7 +5,7 @@ import { EmptyState } from './EmptyState';
 export interface Column<T> {
   key: string;
   label: ReactNode;
-  render: (row: T) => ReactNode;
+  render: (row: T, index: number) => ReactNode;
   sortValue?: (row: T) => string | number;
   className?: string;
 }
@@ -14,11 +14,13 @@ export function DataTable<T extends { id: string }>({
   columns,
   label,
   pageSize = 8,
+  numberedPages = false,
 }: {
   rows: T[];
   columns: Column<T>[];
   label: string;
   pageSize?: number;
+  numberedPages?: boolean;
 }) {
   const [page, setPage] = useState(0);
   const [sort, setSort] = useState<{ key: string; desc: boolean } | null>(null);
@@ -35,6 +37,16 @@ export function DataTable<T extends { id: string }>({
       })
     : rows;
   const actual = Math.min(page, Math.max(0, Math.ceil(rows.length / pageSize) - 1));
+  const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
+  const pageNumbers = [
+    ...new Set([
+      0,
+      totalPages - 1,
+      ...Array.from({ length: 5 }, (_, offset) => actual + offset - 2),
+    ]),
+  ]
+    .filter((value) => value >= 0 && value < totalPages)
+    .sort((a, b) => a - b);
   const visible = ordered.slice(actual * pageSize, (actual + 1) * pageSize);
   return (
     <div className="data-table">
@@ -68,11 +80,11 @@ export function DataTable<T extends { id: string }>({
             </tr>
           </thead>
           <tbody>
-            {visible.map((row) => (
+            {visible.map((row, index) => (
               <tr key={row.id}>
                 {columns.map((c) => (
                   <td key={c.key} className={c.className}>
-                    {c.render(row)}
+                    {c.render(row, actual * pageSize + index)}
                   </td>
                 ))}
               </tr>
@@ -99,9 +111,28 @@ export function DataTable<T extends { id: string }>({
           >
             <ChevronLeft size={16} />
           </Button>
-          <span>
-            {actual + 1} / {Math.max(1, Math.ceil(rows.length / pageSize))}
-          </span>
+          {numberedPages &&
+            pageNumbers.map((number, index) => (
+              <span className="page-number-item" key={number}>
+                {index > 0 && number - pageNumbers[index - 1] > 1 && (
+                  <span aria-hidden="true">...</span>
+                )}
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  aria-label={`Go to page ${number + 1}`}
+                  aria-current={actual === number ? 'page' : undefined}
+                  onClick={() => setPage(number)}
+                >
+                  {number + 1}
+                </Button>
+              </span>
+            ))}
+          {!numberedPages && (
+            <span>
+              {actual + 1} / {totalPages}
+            </span>
+          )}
           <Button
             size="icon"
             variant="ghost"

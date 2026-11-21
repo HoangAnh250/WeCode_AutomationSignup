@@ -37,6 +37,28 @@ describe("Electron security and desktop adapter", () => {
       false,
     );
     assert.equal(args.deleteTask.safeParse([randomUUID(), 1]).success, true);
+    assert.equal(args.deleteProxy.safeParse([randomUUID(), 1]).success, true);
+    assert.equal(
+      args.deleteProxy.safeParse(["../../private", 1]).success,
+      false,
+    );
+    assert.equal(
+      args.updateProxy.safeParse([
+        randomUUID(),
+        { authMode: "replace", username: "only-user" },
+        1,
+      ]).success,
+      false,
+    );
+    assert.equal(
+      args.updateProxy.safeParse([
+        randomUUID(),
+        { port: 9000, authMode: "keep" },
+        1,
+      ]).success,
+      true,
+    );
+
     assert.equal(
       args.taskAction.safeParse([randomUUID(), "executeScript", 1]).success,
       false,

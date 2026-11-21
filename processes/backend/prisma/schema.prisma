@@ -93,6 +93,8 @@ model Proxy {
  lastUsedAt DateTime? @map("last_used_at")
  createdAt DateTime @default(now()) @map("created_at")
  capacity Int @default(1)
+ version Int @default(1)
+ deletedAt DateTime? @map("deleted_at")
  assignments ProxyAssignment[]
  profiles BrowserProfile[]
  health ProxyHealth[]

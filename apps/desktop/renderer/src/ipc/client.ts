@@ -15,6 +15,8 @@ const offline: DesktopClient = {
   taskAction: unavailable,
   importProxies: unavailable,
   checkProxy: unavailable,
+  updateProxy: unavailable,
+  deleteProxy: unavailable,
   createProfile: unavailable,
   deleteProfile: unavailable,
   saveEmail: unavailable,
@@ -72,6 +74,10 @@ function desktop(): DesktopClient | undefined {
     taskAction: (...a) => c.taskAction(...a),
     importProxies: (...a) => c.importProxies(...a),
     checkProxy: (...a) => c.checkProxy(...a),
+    updateProxy: (...a) =>
+      typeof c.updateProxy === 'function' ? c.updateProxy(...a) : unavailable(),
+    deleteProxy: (...a) =>
+      typeof c.deleteProxy === 'function' ? c.deleteProxy(...a) : unavailable(),
     createProfile: (...a) => c.createProfile(...a),
     deleteProfile: (...a) => c.deleteProfile(...a),
     saveEmail: (...a) => c.saveEmail(...a),

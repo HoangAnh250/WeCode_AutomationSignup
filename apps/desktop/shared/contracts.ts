@@ -29,6 +29,30 @@ const proxy = z
     password: z.string().max(512).optional(),
   })
   .strict();
+const proxyEdit = z
+  .object({
+    host: z
+      .string()
+      .min(1)
+      .max(253)
+      .regex(/^[a-zA-Z0-9.:[\]_-]+$/)
+      .optional(),
+    port: z.number().int().min(1).max(65535).optional(),
+    protocol: z.enum(["http", "https", "socks5"]).optional(),
+    authMode: z.enum(["keep", "replace", "remove"]),
+    username: z.string().max(256).optional(),
+    password: z.string().max(512).optional(),
+  })
+  .strict()
+  .refine(
+    (p) => p.authMode !== "replace" || Boolean(p.username && p.password),
+    "Provide both username and password.",
+  )
+  .refine(
+    (p) =>
+      p.authMode === "replace" ||
+      (p.username === undefined && p.password === undefined),
+  );
 export const preferencesSchema = z
   .object({
     concurrency: z.number().int().min(1).max(16),
@@ -74,6 +98,8 @@ export const args = {
   ]),
   importProxies: z.tuple([z.array(proxy).min(1).max(5000)]),
   checkProxy: z.tuple([id]),
+  updateProxy: z.tuple([id, proxyEdit, revision]),
+  deleteProxy: z.tuple([id, revision]),
   createProfile: z.tuple([z.string().trim().min(1).max(120), short]),
   deleteProfile: z.tuple([id]),
   saveEmail: z.tuple([

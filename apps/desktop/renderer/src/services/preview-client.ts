@@ -131,6 +131,45 @@ export function createPreviewClient(): DesktopClient {
       change();
       addLog('Preview: health check requested. No real network probe was performed.', 'network');
     },
+    async updateProxy(id, input, revision) {
+      const proxy = data.proxies.find((p) => p.id === id);
+      if (!proxy) throw new Error('Proxy no longer exists.');
+      if ((proxy.revision ?? 1) !== revision) throw new Error('Proxy changed. Refresh first.');
+      if (proxy.assigned) throw new Error('Proxy is in use.');
+      const endpoint = {
+        host: input.host ?? proxy.host,
+        port: input.port ?? proxy.port,
+        protocol: input.protocol ?? proxy.protocol,
+      };
+      if (
+        data.proxies.some(
+          (p) =>
+            p.id !== id &&
+            p.host === endpoint.host &&
+            p.port === endpoint.port &&
+            p.protocol === endpoint.protocol,
+        )
+      )
+        throw new Error('Proxy already exists.');
+      Object.assign(proxy, endpoint, {
+        health: 'unknown',
+        latency: null,
+        revision: revision + 1,
+        hasCredentials:
+          input.authMode === 'keep' ? proxy.hasCredentials : input.authMode === 'replace',
+      });
+      change();
+      addLog('Proxy updated (preview).', 'system');
+    },
+    async deleteProxy(id, revision) {
+      const proxy = data.proxies.find((p) => p.id === id);
+      if (!proxy) throw new Error('Proxy no longer exists.');
+      if ((proxy.revision ?? 1) !== revision) throw new Error('Proxy changed. Refresh first.');
+      if (proxy.assigned) throw new Error('Proxy is in use.');
+      data.proxies = data.proxies.filter((p) => p.id !== id);
+      change();
+      addLog('Proxy deleted (preview).', 'system');
+    },
     async createProfile(name, proxy) {
       data.profiles.unshift({
         id: crypto.randomUUID(),

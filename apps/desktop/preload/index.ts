@@ -21,6 +21,9 @@ const client: DesktopMethods & {
     call("taskAction", id, action, revision),
   importProxies: (input) => call("importProxies", input),
   checkProxy: (id) => call("checkProxy", id),
+  updateProxy: (id, input, revision) =>
+    call("updateProxy", id, input, revision),
+  deleteProxy: (id, revision) => call("deleteProxy", id, revision),
   createProfile: (name, proxy) => call("createProfile", name, proxy),
   deleteProfile: (id) => call("deleteProfile", id),
   saveEmail: (address, password, options) =>

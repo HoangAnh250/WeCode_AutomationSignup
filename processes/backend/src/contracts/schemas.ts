@@ -154,6 +154,40 @@ export const proxyInputSchema = z
     (p) => Boolean(p.username) === Boolean(p.password),
     'Provide both proxy username and password.',
   );
+export const proxyUpdateSchema = z
+  .object({
+    version: z.number().int().positive(),
+    host: z
+      .string()
+      .min(1)
+      .max(253)
+      .regex(/^[a-zA-Z0-9.:[\]_-]+$/)
+      .optional(),
+    port: z.number().int().min(1).max(65535).optional(),
+    protocol: z.enum(['http', 'https', 'socks5']).optional(),
+    authMode: z.enum(['keep', 'replace', 'remove']).default('keep'),
+    username: z.string().max(256).optional(),
+    password: z.string().max(512).optional(),
+  })
+  .strict()
+  .superRefine((value, ctx) => {
+    if (value.authMode === 'replace' && (!value.username || !value.password))
+      ctx.addIssue({
+        code: 'custom',
+        message: 'Provide both username and password.',
+        path: ['username'],
+      });
+    if (
+      value.authMode !== 'replace' &&
+      (value.username !== undefined || value.password !== undefined)
+    )
+      ctx.addIssue({
+        code: 'custom',
+        message: 'Credentials require Replace mode.',
+        path: ['authMode'],
+      });
+  });
+export type ProxyUpdate = z.infer<typeof proxyUpdateSchema>;
 export const proxyImportSchema = z
   .object({
     format: z.enum(['json', 'txt', 'csv']),

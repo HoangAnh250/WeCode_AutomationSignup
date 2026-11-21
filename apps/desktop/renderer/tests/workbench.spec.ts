@@ -245,6 +245,8 @@ test('preload bridge is used instead of preview and command errors surface', asy
         taskAction: unavailable,
         importProxies: unavailable,
         checkProxy: unavailable,
+        updateProxy: unavailable,
+        deleteProxy: unavailable,
         createProfile: unavailable,
         deleteProfile: unavailable,
         saveEmail: unavailable,
@@ -445,4 +447,77 @@ test('range selection works across pages, bulk edit preserves names and delete k
   await page.getByLabel('Filter task batch').selectOption('');
   await expect(page.getByRole('table').locator('tbody tr')).toHaveCount(3);
   await expect(page.getByRole('table')).toContainText('Weekly account onboarding');
+});
+
+test('proxy single edit preserves credentials by default and supports explicit replacement', async ({
+  page,
+}) => {
+  await page.goto('/');
+  await navigate(page, 'Proxies');
+  const row = page.getByRole('row').filter({ hasText: '192.0.2.12:8002' });
+  await row.getByRole('button', { name: 'Edit 192.0.2.12:8002', exact: true }).click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog.getByLabel('Authentication', { exact: true })).toHaveValue('keep');
+  await dialog.getByLabel('Hostname', { exact: true }).fill('updated.proxy.test');
+  await dialog.getByLabel('Authentication', { exact: true }).selectOption('replace');
+  await dialog.getByLabel('Proxy username', { exact: true }).fill('fixture-user');
+  await dialog.getByLabel('Proxy password', { exact: true }).fill('Fixture-Only!Secret');
+  await dialog.getByRole('button', { name: 'Save proxy', exact: true }).click();
+  await expect(page.getByRole('table')).toContainText('updated.proxy.test:8002');
+  await expect(page.getByRole('table')).not.toContainText('Fixture-Only!Secret');
+  const updated = page.getByRole('row').filter({ hasText: 'updated.proxy.test:8002' });
+  await expect(updated).toContainText('Authenticated');
+  await updated
+    .getByRole('button', { name: 'Delete updated.proxy.test:8002', exact: true })
+    .click();
+  await dialog.getByRole('button', { name: 'Delete', exact: true }).click();
+  await expect(updated).toHaveCount(0);
+  const active = page.getByRole('row').filter({ hasText: '192.0.2.10:8000' });
+  await expect(
+    active.getByRole('button', { name: 'Delete 192.0.2.10:8000', exact: true }),
+  ).toBeDisabled();
+});
+test('proxy numbered pagination supports cross-page selection, bulk edit and filtered bulk delete', async ({
+  page,
+}) => {
+  await page.goto('/');
+  await navigate(page, 'Proxies');
+  await page.getByRole('button', { name: 'Import proxies', exact: true }).click();
+  const dialog = page.getByRole('dialog');
+  await dialog
+    .getByLabel('Proxy entries')
+    .fill(
+      Array.from(
+        { length: 30 },
+        (_, i) => `pageproxy-${String(i + 1).padStart(3, '0')}.test:8080`,
+      ).join('\n'),
+    );
+  await dialog.getByRole('button', { name: 'Validate list', exact: true }).click();
+  await dialog.getByRole('button', { name: 'Import valid proxies', exact: true }).click();
+  await page.getByRole('textbox', { name: 'Search', exact: true }).fill('pageproxy-');
+  await expect(page.getByRole('table').locator('tbody tr')).toHaveCount(10);
+  await page.getByRole('checkbox', { name: 'Select pageproxy-001.test:8080', exact: true }).check();
+  await page.getByRole('button', { name: 'Go to page 3', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Go to page 3', exact: true })).toHaveAttribute(
+    'aria-current',
+    'page',
+  );
+  await page.getByRole('checkbox', { name: 'Select pageproxy-021.test:8080', exact: true }).check();
+  await expect(page.getByText('2 selected', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Edit selected', exact: true }).click();
+  await expect(dialog.getByLabel('Hostname', { exact: true })).toHaveCount(0);
+  await dialog.getByLabel('Port', { exact: true }).fill('8123');
+  await dialog.getByRole('button', { name: 'Save 2 proxies', exact: true }).click();
+  await expect(dialog).not.toBeVisible();
+  await expect(page.getByRole('table')).toContainText('pageproxy-021.test:8123');
+  await page.getByRole('button', { name: 'Go to page 1', exact: true }).click();
+  await expect(page.getByRole('table')).toContainText('pageproxy-001.test:8123');
+  await page.getByRole('checkbox', { name: 'Select all filtered proxies', exact: true }).check();
+  await expect(page.getByText('30 selected', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Delete selected', exact: true }).click();
+  await dialog.getByRole('button', { name: 'Delete', exact: true }).click();
+  await expect(page.getByText('No matching records', { exact: true })).toBeVisible();
+  await page.getByRole('textbox', { name: 'Search', exact: true }).fill('');
+  await page.getByLabel('Proxies per page', { exact: true }).selectOption('25');
+  await expect(page.getByRole('table').locator('tbody tr')).toHaveCount(8);
 });

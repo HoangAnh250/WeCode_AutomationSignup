@@ -47,7 +47,8 @@ export function routes(c: Container) {
   r.get('/proxies/statistics', proxy.statistics);
   r.post('/proxies/:id/check', proxy.check);
   r.get('/proxies/:id/health', proxy.history);
-  r.patch('/proxies/:id', proxy.enabled);
+  r.patch('/proxies/:id', proxy.update);
+  r.delete('/proxies/:id', proxy.delete);
   r.get('/email-configs', email.list);
   r.get('/email-configs/:id/app-password', email.appPassword);
   r.post('/email-configs', email.create);

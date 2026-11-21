@@ -47,6 +47,7 @@ export interface TaskInput {
   profile: string;
 }
 export interface Proxy {
+  revision?: number;
   id: string;
   host: string;
   port: number;
@@ -62,6 +63,14 @@ export interface ProxyInput {
   host: string;
   port: number;
   protocol: Proxy['protocol'];
+  username?: string;
+  password?: string;
+}
+export interface ProxyEditInput {
+  host?: string;
+  port?: number;
+  protocol?: Proxy['protocol'];
+  authMode: 'keep' | 'replace' | 'remove';
   username?: string;
   password?: string;
 }
@@ -146,6 +155,8 @@ export interface DesktopClient {
   taskAction(id: string, action: TaskAction, revision: number): Promise<void>;
   importProxies(input: ProxyInput[]): Promise<{ imported: number }>;
   checkProxy(id: string): Promise<void>;
+  updateProxy(id: string, input: ProxyEditInput, revision: number): Promise<void>;
+  deleteProxy(id: string, revision: number): Promise<void>;
   createProfile(name: string, proxy: string): Promise<void>;
   deleteProfile(id: string): Promise<void>;
   saveEmail(address: string, appPassword?: string, options?: EmailConnectionOptions): Promise<void>;

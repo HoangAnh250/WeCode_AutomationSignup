@@ -381,3 +381,68 @@ test('batch size ten creates ten separate rows and Start all starts only the sel
   await page.getByLabel('Filter task batch').selectOption('');
   await expect(table.locator('tbody tr').filter({ hasText: 'Ten accounts [' })).toHaveCount(10);
 });
+
+test('success task can start again without deleting saved accounts', async ({ page }) => {
+  await page.goto('/');
+  await navigate(page, 'Accounts');
+  await expect(page.getByRole('table').locator('tbody tr')).toHaveCount(8);
+  const count = await page.getByRole('table').locator('tbody tr').count();
+  await navigate(page, 'Tasks');
+  const row = page.getByRole('row').filter({ hasText: 'Email verification batch' });
+  await row.getByRole('button', { name: 'start Email verification batch', exact: true }).click();
+  await expect(row.getByText('running', { exact: true })).toBeVisible();
+  await expect(row.getByRole('progressbar')).toHaveAttribute('value', '0');
+  await navigate(page, 'Accounts');
+  await expect(page.getByRole('table').locator('tbody tr')).toHaveCount(count);
+});
+
+test('range selection works across pages, bulk edit preserves names and delete keeps active rows', async ({
+  page,
+}) => {
+  await page.goto('/');
+  await navigate(page, 'Tasks');
+  await page.getByRole('button', { name: 'Create task', exact: true }).click();
+  const dialog = page.getByRole('dialog');
+  await dialog.getByLabel('Task name').fill('Bulk selection');
+  await dialog.getByLabel('Batch size').fill('30');
+  await dialog.getByRole('button', { name: 'Create task', exact: true }).click();
+  await expect(page.getByRole('table').locator('tbody tr')).toHaveCount(25);
+  await page.getByLabel('From row', { exact: true }).fill('24');
+  await page.getByLabel('To row', { exact: true }).fill('28');
+  await page.getByRole('button', { name: 'Select range', exact: true }).click();
+  await expect(page.getByText('5 selected', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Next page' }).click();
+  await expect(
+    page.getByRole('checkbox', { name: 'Select Bulk selection [26/30]', exact: true }),
+  ).toBeChecked();
+  await expect(
+    page.getByRole('checkbox', { name: 'Select Bulk selection [28/30]', exact: true }),
+  ).toBeChecked();
+  await expect(
+    page.getByRole('checkbox', { name: 'Select Bulk selection [29/30]', exact: true }),
+  ).not.toBeChecked();
+  await page.getByRole('button', { name: 'Edit selected', exact: true }).click();
+  await dialog.getByLabel('Proxy', { exact: true }).selectOption('Local (no proxy)');
+  await dialog.getByLabel('Browser visibility').selectOption('hide');
+  await dialog.getByRole('button', { name: 'Save 5 tasks', exact: true }).click();
+  await expect(dialog).not.toBeVisible();
+  await expect(page.getByRole('row').filter({ hasText: 'Bulk selection [26/30]' })).toContainText(
+    'Local (no proxy)',
+  );
+  await page.getByLabel('From row', { exact: true }).fill('29');
+  await page.getByLabel('To row', { exact: true }).fill('99');
+  await page.getByRole('button', { name: 'Select range', exact: true }).click();
+  await expect(page.getByText(/Enter a row range/)).toBeVisible();
+  await page.getByLabel('From row', { exact: true }).fill('24');
+  await page.getByLabel('To row', { exact: true }).fill('28');
+  await page.getByRole('button', { name: 'Select range', exact: true }).click();
+  await page.getByRole('button', { name: 'Delete selected', exact: true }).click();
+  await dialog.getByRole('button', { name: 'Delete', exact: true }).click();
+  await expect(page.getByText('Showing 1-25 of 25 records')).toBeVisible();
+  await page.getByRole('button', { name: 'Delete all tasks', exact: true }).click();
+  await expect(dialog).toContainText('entire workspace');
+  await dialog.getByRole('button', { name: 'Delete', exact: true }).click();
+  await page.getByLabel('Filter task batch').selectOption('');
+  await expect(page.getByRole('table').locator('tbody tr')).toHaveCount(3);
+  await expect(page.getByRole('table')).toContainText('Weekly account onboarding');
+});

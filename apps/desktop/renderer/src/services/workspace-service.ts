@@ -33,3 +33,30 @@ export const workspaceService = {
   importProxies: (input: ProxyInput[]) => client.importProxies(input),
   savePreferences: (input: Preferences) => client.savePreferences(input),
 };
+
+export interface TaskBatchResult {
+  succeeded: string[];
+  failed: { id: string; name: string; message: string }[];
+}
+// No implicit retry: a lost response may already have committed a versioned command.
+export async function applyToTasks(
+  tasks: Task[],
+  operation: (task: Task) => Promise<unknown>,
+  progress?: (completed: number, total: number) => void,
+): Promise<TaskBatchResult> {
+  const result: TaskBatchResult = { succeeded: [], failed: [] };
+  for (const task of tasks) {
+    try {
+      await operation(task);
+      result.succeeded.push(task.id);
+    } catch (error) {
+      result.failed.push({
+        id: task.id,
+        name: task.name,
+        message: error instanceof Error ? error.message : 'Command could not be confirmed.',
+      });
+    }
+    progress?.(result.succeeded.length + result.failed.length, tasks.length);
+  }
+  return result;
+}

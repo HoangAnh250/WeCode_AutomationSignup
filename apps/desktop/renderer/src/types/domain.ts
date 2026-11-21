@@ -11,6 +11,7 @@ export type TaskStatus =
   | 'needs_reconciliation';
 export type TaskAction = 'start' | 'pause' | 'resume' | 'retry';
 export interface Task {
+  assignedProxy?: string;
   showBrowser?: boolean;
   batchId?: string;
   batchIndex?: number;
@@ -35,6 +36,8 @@ export interface Task {
   retryable?: boolean;
 }
 export interface TaskInput {
+  /** Bulk edits keep the existing identity policy and mailbox. */
+  preserveIdentity?: boolean;
   showBrowser?: boolean;
   creationId?: string;
   name: string;

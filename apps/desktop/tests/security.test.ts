@@ -470,4 +470,118 @@ describe("Electron security and desktop adapter", () => {
       await new Promise<void>((resolve) => server.close(() => resolve()));
     }
   });
+  it("preserves identity configuration during task edits and exposes Start on confirmed success", async () => {
+    const id = randomUUID();
+    const task = {
+      id,
+      name: "Reusable",
+      status: "SUCCEEDED",
+      version: 3,
+      attemptCount: 1,
+      emailConfigId: randomUUID(),
+      currentRun: { outcome: "CREATED" },
+      config: {
+        domain: "original.test",
+        pattern: "[word][digits]",
+        count: 1,
+        password: {
+          length: 24,
+          uppercase: true,
+          lowercase: true,
+          numbers: true,
+          special: true,
+        },
+        batch: { id: randomUUID(), index: 1, size: 10, name: "Original batch" },
+        browser: { proxyMode: "direct", headless: false },
+      },
+    };
+    let patched: any;
+    const server = createServer(async (req, res) => {
+      res.setHeader("Content-Type", "application/json");
+      if (req.method === "PATCH" || req.method === "POST") {
+        let raw = "";
+        for await (const chunk of req) raw += chunk;
+        patched = JSON.parse(raw);
+        res.end("{}");
+      } else if (req.url === `/api/v1/tasks/${id}`)
+        res.end(JSON.stringify(task));
+      else if (req.url?.startsWith("/api/v1/tasks"))
+        res.end(JSON.stringify({ items: [task], total: 1 }));
+      else if (req.url?.includes("email-configs"))
+        res.end(
+          JSON.stringify([
+            { id: task.emailConfigId, accountDomain: "changed.test" },
+          ]),
+        );
+      else if (req.url?.includes("browser-profiles")) res.end("[]");
+      else res.end(JSON.stringify({ items: [], total: 0 }));
+    });
+    await new Promise<void>((resolve) =>
+      server.listen(0, "127.0.0.1", resolve),
+    );
+    const directory = await mkdtemp(join(tmpdir(), "wecode-edit-test-"));
+    try {
+      const api = new BackendClient(
+        `http://127.0.0.1:${(server.address() as { port: number }).port}`,
+        "fixture-token",
+      );
+      const store = new DesktopStore(join(directory, "settings.json"));
+      await store.load();
+      const service = new DesktopService(
+        api,
+        store,
+        async () => {},
+        () => {},
+      );
+      const workspace = await service.getWorkspace();
+      assert.deepEqual(workspace.tasks[0].allowedActions, ["start"]);
+      await service.updateTask(
+        id,
+        {
+          preserveIdentity: true,
+          name: "Changed name",
+          workflow: "Weverse Signup",
+          total: 1,
+          proxy: "Local (no proxy)",
+          profile: "Auto assign",
+          showBrowser: false,
+        },
+        3,
+      );
+      assert.equal(patched.config.domain, "original.test");
+      assert.deepEqual(patched.config.password, task.config.password);
+      assert.deepEqual(patched.config.batch, task.config.batch);
+      assert.equal(patched.config.pattern, "[word][digits]");
+      assert.equal(patched.config.browser.headless, true);
+      assert.equal(patched.emailConfigId, task.emailConfigId);
+      assert.equal(patched.version, 3);
+      await service.updateTask(
+        id,
+        {
+          name: "Single edit",
+          workflow: "Weverse Signup",
+          total: 1,
+          proxy: "Local (no proxy)",
+          profile: "Auto assign",
+        },
+        3,
+      );
+      assert.equal(patched.config.domain, "changed.test");
+      assert.equal(patched.config.password.length, defaults.passwordLength);
+      await service.createTask({
+        name: "Auto with an empty pool",
+        workflow: "Weverse Signup",
+        total: 1,
+        proxy: "Auto assign",
+        profile: "Auto assign",
+      });
+      assert.equal(patched.config.browser.proxyMode, "auto");
+      assert.equal(patched.config.proxyId, undefined);
+    } finally {
+      server.closeAllConnections();
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+      assert.ok(directory.startsWith(join(tmpdir(), "wecode-edit-test-")));
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
 });

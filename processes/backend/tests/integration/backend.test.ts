@@ -97,6 +97,121 @@ describe.skipIf(!enabled)('PostgreSQL + Redis + Express integration', () => {
     expect(r.status).toBe(201);
     return r.body;
   }
+  it.each([
+    [30, 30, 1],
+    [60, 30, 2],
+  ])('balances %i tasks across %i proxies (%i per proxy)', async (size, proxyCount, expected) => {
+    const template = await task();
+    await c.db.proxy.createMany({
+      data: Array.from({ length: proxyCount }, (_, i) => ({
+        host: `192.0.2.${i + 1}`,
+        port: 8080,
+        protocol: 'http',
+        fingerprint: randomUUID(),
+        status: 'healthy',
+      })),
+    });
+    const batchId = randomUUID();
+    await c.tasks.createBatch({
+      batchId,
+      size,
+      task: {
+        name: 'Balanced batch',
+        emailConfigId: template.emailConfigId,
+        config: {
+          ...template.config,
+          browser: { proxyMode: 'auto', profileMode: 'isolated', rotateOnFailure: false },
+        },
+      },
+    });
+    const rows = await c.db.task.findMany({ where: { name: { startsWith: 'Balanced batch' } } });
+    const assigned: string[] = [];
+    for (let i = 0; i < rows.length; i += 5) {
+      const started = await Promise.all(
+        rows.slice(i, i + 5).map((row) => c.tasks.command(row.id, 'start', row.version)),
+      );
+      assigned.push(...started.map((row) => (row.config as any).browser.assignedProxyId));
+    }
+    const counts = new Map<string, number>();
+    assigned.forEach((id) => counts.set(id, (counts.get(id) ?? 0) + 1));
+    expect(counts.size).toBe(proxyCount);
+    expect([...counts.values()]).toEqual(Array(proxyCount).fill(expected));
+    expect(await c.db.proxyAssignment.count()).toBe(0); // Reservations are not simultaneous browser leases.
+    const first = await c.tasks.get(rows[0].id);
+    const paused = await c.tasks.command(first.id, 'pause', first.version);
+    const resumed = await c.tasks.command(first.id, 'resume', paused.version);
+    expect((resumed.config as any).browser.assignedProxyId).toBe(
+      (first.config as any).browser.assignedProxyId,
+    );
+  });
+  it('excludes unavailable and unsupported proxies without silently using Local', async () => {
+    const template = await task();
+    await c.db.proxy.createMany({
+      data: [
+        {
+          host: 'unknown.test',
+          port: 8080,
+          protocol: 'http',
+          fingerprint: randomUUID(),
+          status: 'unknown',
+        },
+        {
+          host: 'dead.test',
+          port: 8080,
+          protocol: 'http',
+          fingerprint: randomUUID(),
+          status: 'unhealthy',
+        },
+        {
+          host: 'disabled.test',
+          port: 8080,
+          protocol: 'http',
+          fingerprint: randomUUID(),
+          status: 'healthy',
+          enabled: false,
+        },
+        {
+          host: 'socks.test',
+          port: 1080,
+          protocol: 'socks5',
+          fingerprint: randomUUID(),
+          status: 'healthy',
+          usernameCipher: 'fixture-only',
+        },
+      ],
+    });
+    const automatic = await c.tasks.update(
+      template.id,
+      {
+        name: template.name,
+        emailConfigId: template.emailConfigId,
+        config: {
+          ...template.config,
+          browser: { proxyMode: 'auto', profileMode: 'isolated', rotateOnFailure: false },
+        },
+      },
+      template.version,
+    );
+    await expect(c.tasks.command(automatic.id, 'start', automatic.version)).rejects.toMatchObject({
+      code: 'NO_HEALTHY_PROXY',
+    });
+    expect((await c.tasks.get(automatic.id)).status).toBe('DRAFT');
+    expect(await c.db.taskRun.count()).toBe(0);
+    const local = await c.tasks.update(
+      automatic.id,
+      {
+        name: template.name,
+        emailConfigId: template.emailConfigId,
+        config: {
+          ...template.config,
+          browser: { proxyMode: 'direct', profileMode: 'isolated', rotateOnFailure: false },
+        },
+      },
+      automatic.version,
+    );
+    const started = await c.tasks.command(local.id, 'start', local.version);
+    expect((started.config as any).browser.assignedProxyId).toBeUndefined();
+  });
   it('enforces authentication, origin isolation and non-leaking errors', async () => {
     expect((await request(app).get('/health/live')).status).toBe(200);
     expect((await request(app).get('/api/v1/accounts')).status).toBe(401);
@@ -225,6 +340,92 @@ describe.skipIf(!enabled)('PostgreSQL + Redis + Express integration', () => {
     });
     expect(attempts).toBe(2);
     expect(await c.db.account.count()).toBe(1);
+  });
+  it('starts a completed task as a fresh account cycle while preserving accounts and runs', async () => {
+    const t = await task();
+    const first = await c.tasks.command(t.id, 'start', 1);
+    let executions = 0;
+    const executor: AutomationExecutor = {
+      execute: async (ctx) => {
+        executions++;
+        await ctx.beforeExternalMutation();
+        await c.accounts.create({
+          email: `cycle${executions}@nam.fit`,
+          username: `cycle${executions}`,
+          password: 'test-only-password',
+          status: 'created',
+          taskRunId: ctx.runId,
+        });
+      },
+    };
+    const processor = createTaskProcessor(c.db, executor, new AbortController().signal);
+    const process = (id: string) =>
+      processor({ data: { runId: id }, attemptsMade: 0, opts: { attempts: 1 } });
+    await process(first.currentRunId!);
+    const completed = await c.tasks.get(t.id);
+    const edited = await c.tasks.update(
+      t.id,
+      {
+        name: 'Reusable task',
+        emailConfigId: t.emailConfigId,
+        config: {
+          ...t.config,
+          browser: { profileId: randomUUID(), sessionId: randomUUID(), profileMode: 'persistent' },
+        },
+      },
+      completed.version,
+    );
+    expect(edited.status).toBe('SUCCEEDED');
+    await c.db.workflowState.create({
+      data: { taskId: t.id, email: 'cycle1@nam.fit', payloadCipher: 'test-confirmed-journal' },
+    });
+    await c.db.taskRun.update({
+      where: { id: first.currentRunId! },
+      data: { checkpoint: { stage: 'account-saved' } },
+    });
+    const restarted = await c.tasks.command(t.id, 'start', edited.version);
+    expect(restarted.currentRunId).not.toBe(first.currentRunId);
+    expect(restarted.config).toMatchObject({ browser: { profileMode: 'isolated' } });
+    expect((restarted.config as any).browser.profileId).toBeUndefined();
+    expect((restarted.config as any).browser.sessionId).toBeUndefined();
+    expect(await c.db.workflowState.findUnique({ where: { taskId: t.id } })).toBeNull();
+    const run = await c.db.taskRun.findUniqueOrThrow({ where: { id: restarted.currentRunId! } });
+    expect(run.outcome).toBe('NOT_CREATED');
+    expect(run.checkpoint).toBeNull();
+    expect(await c.db.account.count()).toBe(1);
+    await expect(c.tasks.command(t.id, 'start', edited.version)).rejects.toThrow('Task changed');
+    await process(restarted.currentRunId!);
+    expect((await c.tasks.get(t.id)).status).toBe('SUCCEEDED');
+    expect(await c.db.account.count()).toBe(2);
+    expect(await c.db.taskRun.count({ where: { taskId: t.id } })).toBe(2);
+    const done = await c.tasks.get(t.id);
+    await c.tasks.delete(t.id, done.version);
+    expect(await c.db.account.count()).toBe(2);
+    expect(await c.db.taskRun.count({ where: { taskId: t.id } })).toBe(2);
+    await expect(c.tasks.get(t.id)).rejects.toThrow();
+  });
+  it('refuses restart and deletion when a completed result is uncertain or missing', async () => {
+    const t = await task();
+    const started = await c.tasks.command(t.id, 'start', 1);
+    await c.db.task.update({ where: { id: t.id }, data: { status: 'SUCCEEDED' } });
+    await c.db.taskRun.update({
+      where: { id: started.currentRunId! },
+      data: { status: 'SUCCEEDED', outcome: 'UNKNOWN' },
+    });
+    await expect(c.tasks.command(t.id, 'start', started.version)).rejects.toThrow(
+      'Resolve the external outcome',
+    );
+    await expect(c.tasks.delete(t.id, started.version)).rejects.toThrow(
+      'Resolve the external outcome',
+    );
+    await c.db.taskRun.update({
+      where: { id: started.currentRunId! },
+      data: { outcome: 'CREATED' },
+    });
+    await expect(c.tasks.command(t.id, 'start', started.version)).rejects.toThrow(
+      'saved successful account',
+    );
+    expect(await c.db.taskRun.count({ where: { taskId: t.id } })).toBe(1);
   });
   it('stores session payloads encrypted and refuses expired snapshots', async () => {
     const account = await c.accounts.create({

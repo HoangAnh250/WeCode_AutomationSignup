@@ -1,7 +1,9 @@
+import { setTimeout as delay } from "node:timers/promises";
 import { DesktopError } from "./errors";
 export class BackendClient {
   readonly configured: boolean;
   private readonly base: string;
+  private nextRequestAt = 0;
   constructor(
     base: string,
     private readonly token?: string,
@@ -40,6 +42,11 @@ export class BackendClient {
         "INVALID_BACKEND_PATH",
         "Invalid service request.",
       );
+    // Share one request budget across IPC commands and background refreshes. Bulk
+    // edits/deletes must not exhaust the local API's 300 requests/minute limit.
+    const slot = Math.max(Date.now(), this.nextRequestAt);
+    this.nextRequestAt = slot + 250;
+    if (slot > Date.now()) await delay(slot - Date.now());
     let response: Response;
     try {
       response = await fetch(this.base + path, {

@@ -209,7 +209,9 @@ export class WorkerExecutor implements AutomationExecutor {
         options.sessionId,
       );
       const configuredId =
-        config.proxyId ?? (sticky ? (profile.assignedProxyId ?? undefined) : undefined);
+        config.proxyId ??
+        options.assignedProxyId ??
+        (sticky ? (profile.assignedProxyId ?? undefined) : undefined);
       const mode = explicitDirect ? 'direct' : configuredId ? 'fixed' : options.proxyMode;
       const preferredId =
         configuredId ??
@@ -231,7 +233,39 @@ export class WorkerExecutor implements AutomationExecutor {
         options.rotateOnFailure,
         mode,
       );
-      proxy = await d.rotation.next(owner, { mode, ...choice });
+      let waitingForProxy = false;
+      let waitRenewedAt = Date.now();
+      for (;;) {
+        await check();
+        try {
+          proxy = await d.rotation.next(owner, { mode, ...choice });
+          break;
+        } catch (error) {
+          if (
+            !(error instanceof AppError) ||
+            error.code !== 'NO_PROXY_CAPACITY' ||
+            !options.assignedProxyId ||
+            preferredId !== options.assignedProxyId
+          )
+            throw error;
+          const assigned = await d.db.proxy.findUnique({ where: { id: options.assignedProxyId } });
+          if (!assigned?.enabled || assigned.status !== 'healthy') throw error;
+          if (!waitingForProxy) {
+            await taskEvent(d.db, 'task.proxy_waiting', execution.taskId, execution.runId);
+            waitingForProxy = true;
+          }
+          if (Date.now() - waitRenewedAt > (d.config.BROWSER_LEASE_SECONDS * 1000) / 3) {
+            if (!(await d.profiles.renew(profile)))
+              throw new AppError(
+                'RESOURCE_LEASE_LOST',
+                'Profile lease was lost while waiting for its proxy.',
+                409,
+              );
+            waitRenewedAt = Date.now();
+          }
+          await new Promise<void>((resolve) => setTimeout(resolve, 250));
+        }
+      }
       await d.profiles.repository.bindProxy(profile, proxy?.proxy.id ?? null);
       let lastRenew = Date.now();
       const tick = async () => {

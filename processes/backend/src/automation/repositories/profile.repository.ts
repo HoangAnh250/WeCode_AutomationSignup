@@ -61,7 +61,8 @@ export class ProfileRepository {
         throw conflict('Execution does not own an active run.');
       let profileId = id;
       if (!profileId) {
-        const name = `task-${taskId}`;
+        const generation = await tx.taskRun.count({ where: { taskId, status: 'SUCCEEDED' } });
+        const name = generation ? `task-${taskId}-cycle-${generation + 1}` : `task-${taskId}`;
         const existing = await tx.browserProfile.upsert({
           where: { installationId_name: { installationId: this.installationId, name } },
           create: { installationId: this.installationId, name, mode },

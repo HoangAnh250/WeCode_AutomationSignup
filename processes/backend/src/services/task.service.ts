@@ -1,3 +1,5 @@
+import { allocateAutomaticProxy } from './auto-proxy-allocation.js';
+import { taskConfigSchema } from '../contracts/schemas.js';
 import { isDeepStrictEqual } from 'node:util';
 import { createHash, randomUUID } from 'node:crypto';
 import type { TaskCreate, TaskBatchCreate } from '../contracts/schemas.js';
@@ -108,12 +110,16 @@ export class TaskManager {
   async update(id: string, input: TaskCreate, version: number) {
     return this.repo.locked(id, async (tx, task) => {
       this.version(task, version);
-      if (!['DRAFT', 'PAUSED', 'FAILED', 'BLOCKED'].includes(task.status))
+      if (!['DRAFT', 'PAUSED', 'FAILED', 'BLOCKED', 'SUCCEEDED'].includes(task.status))
         throw conflict('Task configuration cannot be changed in this state.');
       const run = task.currentRunId
         ? await tx.taskRun.findUnique({ where: { id: task.currentRunId } })
         : null;
-      if (run && run.outcome !== 'NOT_CREATED')
+      if (
+        run &&
+        run.outcome !== 'NOT_CREATED' &&
+        !(task.status === 'SUCCEEDED' && run.outcome === 'CREATED')
+      )
         throw conflict('A task with created or uncertain external state cannot be reconfigured.');
       const batch = (task.config as { batch?: unknown }).batch;
       const config = batch ? { ...input.config, batch } : input.config;
@@ -123,7 +129,7 @@ export class TaskManager {
       const updated = await tx.task.update({
         where: { id },
         data: {
-          ...(inputsChanged
+          ...(inputsChanged && task.status !== 'SUCCEEDED'
             ? { status: 'DRAFT' as const, currentRunId: null, desiredState: 'paused' }
             : {}),
           name: input.name,
@@ -141,6 +147,11 @@ export class TaskManager {
       this.version(task, version);
       if (['RUNNING', 'QUEUED', 'PAUSE_REQUESTED', 'NEEDS_RECONCILIATION'].includes(task.status))
         throw conflict('Stop at a safe checkpoint before deleting this task.');
+      const run = task.currentRunId
+        ? await tx.taskRun.findUnique({ where: { id: task.currentRunId } })
+        : null;
+      if (run?.outcome === 'UNKNOWN')
+        throw conflict('Resolve the external outcome before deleting this task.');
       await tx.task.update({
         where: { id },
         data: { deletedAt: new Date(), version: { increment: 1 } },
@@ -171,8 +182,8 @@ export class TaskManager {
         await audit(tx, 'task.pause_requested', id);
         return updated;
       }
-      if (action === 'start' && task.status !== 'DRAFT')
-        throw conflict('Only a draft task can be started.');
+      if (action === 'start' && !['DRAFT', 'SUCCEEDED'].includes(task.status))
+        throw conflict('Only draft or successfully completed tasks can be started.');
       if (action === 'resume' && task.status !== 'PAUSED')
         throw conflict('Only an acknowledged paused task can be resumed.');
       if (
@@ -208,6 +219,29 @@ export class TaskManager {
           'Task domain differs from the configured account domain. Update the task before starting.',
           422,
         );
+      const freshCycle = action === 'start' && task.status === 'SUCCEEDED';
+      let nextConfig = json(task.config);
+      if (freshCycle) {
+        if (
+          !previous ||
+          previous.outcome !== 'CREATED' ||
+          !(await tx.account.findFirst({ where: { taskRunId: previous.id }, select: { id: true } }))
+        )
+          throw conflict('A saved successful account is required before starting a new cycle.');
+        // Task row lock fences old executions. Keep runs/accounts, discard only the completed
+        // identity journal. New cycles never inherit authentication from a previous account.
+        await tx.workflowState.deleteMany({ where: { taskId: id } });
+        const config = task.config as Record<string, unknown>;
+        const browser = (config.browser ?? {}) as Record<string, unknown>;
+        const {
+          profileId: _profile,
+          sessionId: _session,
+          assignedProxyId: _assigned,
+          ...options
+        } = browser;
+        nextConfig = json({ ...config, browser: { ...options, profileMode: 'isolated' } });
+      }
+      nextConfig = json(await allocateAutomaticProxy(tx, id, taskConfigSchema.parse(nextConfig)));
       const attempt = task.attemptCount + 1;
       const run = await tx.taskRun.create({
         data: {
@@ -222,6 +256,7 @@ export class TaskManager {
       const updated = await tx.task.update({
         where: { id },
         data: {
+          config: json(nextConfig),
           currentRunId: run.id,
           attemptCount: attempt,
           desiredState: 'running',
@@ -229,7 +264,7 @@ export class TaskManager {
           version: { increment: 1 },
         },
       });
-      await audit(tx, `task.${action}`, id, { runId: run.id });
+      await audit(tx, `task.${action}`, id, { runId: run.id, freshCycle });
       return { ...updated, runId: run.id };
     });
   }

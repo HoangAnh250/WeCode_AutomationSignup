@@ -2234,3 +2234,61 @@ strong {
   overflow-wrap: anywhere;
   line-height: 1.6;
 }
+
+.task-selection-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--border);
+}
+.task-range-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px;
+}
+.task-range-controls label {
+  display: grid;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.task-range-controls .input {
+  width: 88px;
+}
+.task-selection-hint,
+.task-bulk-report {
+  margin: 0;
+  padding: 0 16px 12px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.task-bulk-report {
+  color: var(--foreground);
+  overflow-wrap: anywhere;
+}
+.data-table input[type='checkbox'] {
+  width: 17px;
+  height: 17px;
+  accent-color: var(--accent);
+  cursor: pointer;
+  vertical-align: middle;
+}
+
+.task-selection-toolbar > .row-actions {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.data-table .task-actions-column {
+  position: sticky;
+  right: 0;
+  z-index: 1;
+  background: var(--surface);
+  box-shadow: -1px 0 var(--border);
+}
+.data-table th.task-actions-column {
+  z-index: 2;
+}

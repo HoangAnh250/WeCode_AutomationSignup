@@ -160,6 +160,9 @@ export class DesktopService implements DesktopMethods {
               : t.config.browser?.proxyMode === "direct"
                 ? "Local (no proxy)"
                 : "Auto assign",
+            assignedProxy: t.config.browser?.assignedProxyId
+              ? proxyName(t.config.browser.assignedProxyId)
+              : undefined,
             profile:
               profiles.find((p) => p.id === t.config.browser?.profileId)
                 ?.name ?? "Auto assign",
@@ -171,7 +174,8 @@ export class DesktopService implements DesktopMethods {
             businessOutcome: t.currentRun?.outcome,
             retryable,
             allowedActions:
-              t.status === "DRAFT"
+              t.status === "DRAFT" ||
+              (t.status === "SUCCEEDED" && t.currentRun?.outcome === "CREATED")
                 ? ["start"]
                 : t.status === "PAUSED"
                   ? ["resume"]
@@ -318,13 +322,7 @@ export class DesktopService implements DesktopMethods {
           headless:
             input.showBrowser === undefined ? undefined : !input.showBrowser,
           profileId: profile?.id,
-          proxyMode: directProxy
-            ? "direct"
-            : proxy
-              ? "fixed"
-              : proxies.length
-                ? "auto"
-                : "direct",
+          proxyMode: directProxy ? "direct" : proxy ? "fixed" : "auto",
         },
       },
     };
@@ -341,8 +339,35 @@ export class DesktopService implements DesktopMethods {
     this.notify();
   };
   updateTask = async (id: string, input: TaskInput, revision: number) => {
+    const body = await this.taskBody(input);
+    let update = body;
+    if (input.preserveIdentity) {
+      const existing = await this.api.request<RecordData>(
+        `/api/v1/tasks/${id}`,
+      );
+      update = {
+        ...body,
+        emailConfigId: existing.emailConfigId ?? body.emailConfigId,
+        config: {
+          ...existing.config,
+          proxyId: body.config.proxyId,
+          browser: {
+            ...existing.config.browser,
+            ...body.config.browser,
+            assignedProxyId:
+              body.config.browser.proxyMode ===
+                existing.config.browser?.proxyMode &&
+              body.config.proxyId === existing.config.proxyId &&
+              body.config.browser.profileId ===
+                existing.config.browser?.profileId
+                ? existing.config.browser?.assignedProxyId
+                : undefined,
+          },
+        },
+      };
+    }
     await this.api.request(`/api/v1/tasks/${id}`, "PATCH", {
-      ...(await this.taskBody(input)),
+      ...update,
       version: revision,
     });
     this.notify();

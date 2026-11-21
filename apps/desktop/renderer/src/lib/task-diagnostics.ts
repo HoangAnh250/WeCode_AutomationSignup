@@ -10,6 +10,8 @@ export function taskErrorMessage(code?: string) {
     BROWSER_LAUNCH_FAILED: 'The browser could not start. Check its installation before retrying.',
     BROWSER_OPERATION_TIMEOUT:
       'A browser operation timed out. Check the task logs before retrying.',
+    NO_HEALTHY_PROXY:
+      'Auto assign needs a healthy enabled proxy. Check the pool or select Local explicitly.',
     NO_PROXY_CAPACITY: 'No healthy proxy slot is available. Check the proxy pool or use Local.',
     PROFILE_PROXY_CONFLICT: 'Local requires a browser profile without an assigned proxy.',
     PROFILE_BUSY: 'The selected browser profile is in use or awaiting review.',
@@ -59,6 +61,8 @@ export function taskEventMessage(event: string, code?: string) {
     'task.worker_started': 'Worker picked up this run.',
     'task.workflow_check': 'Checking whether the signup workflow is available.',
     'task.workflow_available': 'Signup workflow found. Validating task configuration.',
+    'task.proxy_waiting':
+      'Waiting for the assigned proxy to become available; the connection will not switch to Local.',
     'task.resources_waiting': 'Acquiring a browser profile and connection slot.',
     'task.browser_opened': 'Browser context opened.',
     'task.workflow_started': 'Running the browser workflow.',

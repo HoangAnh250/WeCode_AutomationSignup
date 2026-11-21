@@ -41,6 +41,7 @@ export const identitySchema = z
 export const browserTaskSchema = z
   .object({
     profileId: idSchema.optional(),
+    assignedProxyId: idSchema.optional(),
     profileMode: z.enum(['isolated', 'persistent']).default('isolated'),
     proxyMode: z.enum(['direct', 'auto', 'fixed']).default('direct'),
     rotateOnFailure: z.boolean().default(false),

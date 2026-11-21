@@ -68,8 +68,8 @@ export function createPreviewClient(): DesktopClient {
     },
     async updateTask(id, input, revision) {
       const task = find(id, revision);
-      if (['running', 'success'].includes(task.status))
-        throw new Error('Running and completed tasks cannot be edited.');
+      if (['running', 'pending', 'needs_reconciliation'].includes(task.status))
+        throw new Error('Queued, running and uncertain tasks cannot be edited.');
       Object.assign(task, input, { revision: task.revision + 1 });
       change();
       addLog(`Updated ${id} (preview).`);
@@ -85,6 +85,12 @@ export function createPreviewClient(): DesktopClient {
       const task = find(id, revision);
       if (!task.allowedActions.includes(action))
         throw new Error('This action is unavailable for the current task state.');
+      if (action === 'start' && task.status === 'success') {
+        task.completed = 0;
+        task.progress = 0;
+        task.total = 1;
+        task.duration = '-';
+      }
       task.status = action === 'pause' ? 'paused' : action === 'retry' ? 'pending' : 'running';
       if (action === 'retry') task.retries++;
       task.allowedActions = action === 'pause' ? ['resume'] : ['pause'];

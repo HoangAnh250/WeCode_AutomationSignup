@@ -14,6 +14,7 @@ const task = z
     workflow: z.string().max(80),
     total: z.number().int().min(1).max(1000),
     creationId: z.string().uuid().optional(),
+    preserveIdentity: z.boolean().optional(),
     showBrowser: z.boolean().optional(),
     proxy: short,
     profile: short,

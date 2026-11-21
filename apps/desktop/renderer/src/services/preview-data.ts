@@ -6,7 +6,7 @@ const actions = (s: string) =>
       ? ['retry' as const]
       : s === 'paused'
         ? ['resume' as const]
-        : ['draft', 'pending'].includes(s)
+        : ['draft', 'pending', 'success'].includes(s)
           ? ['start' as const]
           : [];
 export function createPreviewData(): WorkspaceData {

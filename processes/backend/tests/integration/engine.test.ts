@@ -357,6 +357,49 @@ describe.skipIf(!enabled)('Playwright + PostgreSQL + BullMQ engine', () => {
     const next = await engine.assignments.acquire(b.owner, p.id);
     await engine.assignments.release(next);
   });
+  it('waits for an automatically assigned proxy instead of switching IP or failing immediately', async () => {
+    const proxy = await db.proxy.create({
+      data: {
+        host: '127.0.0.1',
+        port: 3128,
+        protocol: 'http',
+        fingerprint: randomUUID(),
+        status: 'healthy',
+      },
+    });
+    const first = await run();
+    const held = await engine.assignments.acquire(first.owner, proxy.id);
+    const second = await run('RUNNING', {
+      domain: 'example.test',
+      browser: { proxyMode: 'auto', assignedProxyId: proxy.id },
+    });
+    driver = async ({ execution }) => {
+      await execution.beforeExternalMutation();
+      return {
+        account: {
+          email: `wait-${execution.runId}@example.test`,
+          username: 'waiting',
+          password: 'Fixture-Only!123',
+          status: 'verified',
+        },
+      };
+    };
+    const executing = engine.executor.execute(second.execution);
+    try {
+      await vi.waitFor(async () =>
+        expect(
+          await db.log.count({ where: { entityId: second.task.id, event: 'task.proxy_waiting' } }),
+        ).toBe(1),
+      );
+      expect(await db.account.count()).toBe(0);
+      await engine.assignments.release(held);
+      await executing;
+      expect((await db.account.findFirstOrThrow()).proxyUsed).toBe('http://127.0.0.1:3128');
+      expect(await db.proxyAssignment.count({ where: { proxyId: proxy.id } })).toBe(2);
+    } finally {
+      await engine.assignments.release(held);
+    }
+  });
   it('rotates to another healthy proxy on a safe pre-commit retry', async () => {
     const a = await run();
     const p = await db.proxy.create({
@@ -616,6 +659,28 @@ describe.skipIf(!enabled)('Playwright + PostgreSQL + BullMQ engine', () => {
       ),
     );
     expect(submitted).toBe(1);
+    expect(await db.account.count()).toBe(1);
+  });
+  it('uses a new clean automatic profile after success and retains the same profile on retry', async () => {
+    const first = await run();
+    await engine.executor.execute(first.execution);
+    const original = await db.browserProfile.findFirstOrThrow();
+    expect(original.stateVersion).toBeGreaterThan(0);
+    await db.taskRun.update({ where: { id: first.record.id }, data: { status: 'SUCCEEDED' } });
+    const token = randomUUID();
+    const next = await db.taskRun.create({
+      data: { taskId: first.task.id, attempt: 2, status: 'RUNNING', leaseToken: token },
+    });
+    await db.task.update({ where: { id: first.task.id }, data: { currentRunId: next.id } });
+    const owner = { runId: next.id, token };
+    const fresh = await engine.profiles.acquire(owner, undefined, first.task.id);
+    expect(fresh.id).not.toBe(original.id);
+    expect((await engine.profiles.repository.owned(fresh)).stateVersion).toBe(0);
+    expect(await engine.storage.load(fresh)).toBeUndefined();
+    await engine.profiles.release(fresh);
+    const retried = await engine.profiles.acquire(owner, undefined, first.task.id);
+    expect(retried.id).toBe(fresh.id);
+    await engine.profiles.release(retried);
     expect(await db.account.count()).toBe(1);
   });
   it('routes Playwright traffic through the assigned authenticated HTTP proxy', async () => {

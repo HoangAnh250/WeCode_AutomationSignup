@@ -1,3 +1,6 @@
+import { allocateAutomaticProxy } from '../../src/services/auto-proxy-allocation.js';
+import { taskConfigSchema } from '../../src/contracts/schemas.js';
+import { json } from '../../src/core/json.js';
 import { createEngine } from '../../src/automation/create-engine.js';
 import { EmailVerificationCoordinator } from '../../src/automation/EmailVerificationCoordinator.js';
 import type { ExecutionContext } from '../../src/queue/executor.js';
@@ -130,7 +133,19 @@ describe.skipIf(!enabled)('PostgreSQL + Redis + Express integration', () => {
     const assigned: string[] = [];
     for (let i = 0; i < rows.length; i += 5) {
       const started = await Promise.all(
-        rows.slice(i, i + 5).map((row) => c.tasks.command(row.id, 'start', row.version)),
+        rows.slice(i, i + 5).map(async (row) => {
+          await c.tasks.command(row.id, 'start', row.version);
+          return c.db.$transaction(async (tx) => {
+            await tx.$queryRaw`SELECT id FROM tasks WHERE id=${row.id}::uuid FOR UPDATE`;
+            const current = await tx.task.findUniqueOrThrow({ where: { id: row.id } });
+            const config = await allocateAutomaticProxy(
+              tx,
+              row.id,
+              taskConfigSchema.parse(current.config),
+            );
+            return tx.task.update({ where: { id: row.id }, data: { config: json(config) } });
+          });
+        }),
       );
       assigned.push(...started.map((row) => (row.config as any).browser.assignedProxyId));
     }
@@ -194,11 +209,14 @@ describe.skipIf(!enabled)('PostgreSQL + Redis + Express integration', () => {
       },
       template.version,
     );
-    await expect(c.tasks.command(automatic.id, 'start', automatic.version)).rejects.toMatchObject({
-      code: 'NO_HEALTHY_PROXY',
-    });
-    expect((await c.tasks.get(automatic.id)).status).toBe('DRAFT');
-    expect(await c.db.taskRun.count()).toBe(0);
+    const queued = await c.tasks.command(automatic.id, 'start', automatic.version);
+    expect(queued.status).toBe('QUEUED');
+    await expect(
+      c.db.$transaction((tx) =>
+        allocateAutomaticProxy(tx, automatic.id, taskConfigSchema.parse(queued.config)),
+      ),
+    ).rejects.toMatchObject({ code: 'NO_HEALTHY_PROXY' });
+    const paused = await c.tasks.command(queued.id, 'pause', queued.version);
     const local = await c.tasks.update(
       automatic.id,
       {
@@ -209,7 +227,7 @@ describe.skipIf(!enabled)('PostgreSQL + Redis + Express integration', () => {
           browser: { proxyMode: 'direct', profileMode: 'isolated', rotateOnFailure: false },
         },
       },
-      automatic.version,
+      paused.version,
     );
     const started = await c.tasks.command(local.id, 'start', local.version);
     expect((started.config as any).browser.assignedProxyId).toBeUndefined();

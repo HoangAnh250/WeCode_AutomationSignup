@@ -521,3 +521,122 @@ test('proxy numbered pagination supports cross-page selection, bulk edit and fil
   await page.getByLabel('Proxies per page', { exact: true }).selectOption('25');
   await expect(page.getByRole('table').locator('tbody tr')).toHaveCount(8);
 });
+
+test('Start all can be used again after successful completion and skips ineligible tasks', async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    const tasks = [
+      { id: 'success-a', name: 'Completed A', status: 'success', allowedActions: ['start'] },
+      { id: 'success-b', name: 'Completed B', status: 'success', allowedActions: ['start'] },
+      { id: 'draft-c', name: 'New C', status: 'draft', allowedActions: ['start'] },
+      { id: 'running-d', name: 'Running D', status: 'running', allowedActions: ['pause'] },
+      { id: 'failed-e', name: 'Failed E', status: 'failed', allowedActions: [] },
+      { id: 'unknown-f', name: 'Review F', status: 'needs_reconciliation', allowedActions: [] },
+    ].map((task) => ({
+      ...task,
+      workflow: 'Weverse Signup',
+      total: 1,
+      completed: task.status === 'success' ? 1 : 0,
+      progress: task.status === 'success' ? 100 : 0,
+      proxy: 'Local (no proxy)',
+      profile: 'Auto assign',
+      duration: '-',
+      retries: 0,
+      revision: 1,
+    }));
+    const listeners = new Set<(event: unknown) => void>();
+    const calls: { id: string; revision: number }[] = [];
+    const eligible = ['success-a', 'success-b', 'draft-c'];
+    const client = {
+      getWorkspace: async () =>
+        structuredClone({
+          tasks,
+          proxies: [],
+          profiles: [],
+          accounts: [],
+          email: { address: '', configured: false, status: 'unknown' },
+          preferences: {
+            concurrency: 2,
+            catchallDomain: 'example.test',
+            usernamePrefix: 'qa',
+            usernameLength: 12,
+            passwordLength: 20,
+            uppercase: true,
+            numbers: true,
+            symbols: true,
+          },
+        }),
+      getLogs: async () => [],
+      taskAction: async (id: string, action: string, revision: number) => {
+        const task = tasks.find((task) => task.id === id)!;
+        if (
+          action !== 'start' ||
+          !task.allowedActions.includes('start') ||
+          revision !== task.revision
+        )
+          throw new Error('Invalid or stale start.');
+        calls.push({ id, revision });
+        task.status = 'pending';
+        task.allowedActions = ['pause'];
+        task.revision++;
+      },
+      subscribe: (listener: (event: unknown) => void) => {
+        listeners.add(listener);
+        return () => listeners.delete(listener);
+      },
+    } as Record<string, unknown>;
+    for (const method of [
+      'createTask',
+      'updateTask',
+      'deleteTask',
+      'importProxies',
+      'checkProxy',
+      'updateProxy',
+      'deleteProxy',
+      'createProfile',
+      'deleteProfile',
+      'saveEmail',
+      'testEmail',
+      'savePreferences',
+      'exportAccounts',
+      'exportLogs',
+    ])
+      client[method] = async () => {};
+    window.wecode = { protocolVersion: 1, client: client as never };
+    (window as any).__cycles = {
+      calls,
+      complete: () => {
+        for (const task of tasks.filter((task) => eligible.includes(task.id))) {
+          task.status = 'success';
+          task.allowedActions = ['start'];
+          task.revision++;
+        }
+        for (const listener of listeners) listener({ type: 'data.changed' });
+      },
+    };
+  });
+  await page.goto('/');
+  await navigate(page, 'Tasks');
+  await page.getByRole('button', { name: 'Start all (3)', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Start all (0)', exact: true })).toBeDisabled();
+  let calls = await page.evaluate(() => (window as any).__cycles.calls);
+  expect(calls.map((call: any) => call.id).sort()).toEqual(['draft-c', 'success-a', 'success-b']);
+  await page.evaluate(() => (window as any).__cycles.complete());
+  await expect(page.getByRole('button', { name: 'Start all (3)', exact: true })).toBeEnabled();
+  await page.getByRole('button', { name: 'Start all (3)', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Start all (0)', exact: true })).toBeDisabled();
+  calls = await page.evaluate(() => (window as any).__cycles.calls);
+  expect(calls).toHaveLength(6);
+  expect(
+    calls
+      .slice(3)
+      .map((call: any) => call.id)
+      .sort(),
+  ).toEqual(['draft-c', 'success-a', 'success-b']);
+  expect(calls.slice(3).every((call: any) => call.revision === 3)).toBe(true);
+  await expect(page.getByRole('row').filter({ hasText: 'Failed E' })).toContainText('failed');
+  await expect(page.getByRole('row').filter({ hasText: 'Review F' })).toContainText(
+    'needs reconciliation',
+  );
+});

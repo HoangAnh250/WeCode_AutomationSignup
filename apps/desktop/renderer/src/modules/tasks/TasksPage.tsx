@@ -70,7 +70,7 @@ export function TasksPage({
     const result = await workspaceService.startTasks(tasks);
     if (result.unconfirmed)
       throw new Error(
-        `Queued ${result.started} rows; ${result.unconfirmed} commands could not be confirmed. Refresh and start the remaining draft rows.`,
+        `Queued ${result.started} rows; ${result.unconfirmed} commands could not be confirmed. Refresh and start the remaining eligible rows.`,
       );
   }, 'Eligible account rows queued.');
   const remove = useCommand(async (selection: NonNullable<typeof deleting>) => {
@@ -120,9 +120,7 @@ export function TasksPage({
       `${t.name} ${t.id} ${t.workflow}`.toLowerCase().includes(debounced.toLowerCase()),
   );
   if (batchId) rows.sort((a, b) => (a.batchIndex ?? 0) - (b.batchIndex ?? 0));
-  const startable = rows.filter(
-    (task) => task.status === 'draft' && task.allowedActions.includes('start'),
-  );
+  const startable = rows.filter((task) => task.allowedActions.includes('start'));
   const selectedRows = rows.filter((task) => selected.has(task.id));
   const toggle = (id: string) =>
     setSelected((old) => {
@@ -334,7 +332,7 @@ export function TasksPage({
             </Button>
             <Button
               disabled={busy || startable.length === 0}
-              title="Start all draft rows matching the current batch and filters"
+              title="Start eligible draft and successful rows matching the current filters. Successful rows create new accounts."
               onClick={() => startAll.mutate(startable)}
             >
               <Play size={16} />
@@ -470,9 +468,10 @@ export function TasksPage({
         <DataTable rows={rows} columns={columns} label="Automation tasks" pageSize={25} />
       </div>
       <p className="page-footnote">
-        Each row creates one account. Start all queues matching draft rows; worker and browser
-        capacity determine how many run at once. Start again on a successful row creates a new
-        account with a clean browser profile and keeps previous accounts in history.
+        Each row creates one account per run. Start all starts eligible draft and successful rows
+        matching the current filters. Each successful row creates a new account in a clean browser
+        profile and keeps previous accounts in history. Running and unresolved rows are skipped.
+        Worker and browser capacity determine how many run at once.
       </p>
       {editing && (
         <BulkTaskEditor

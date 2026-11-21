@@ -1,5 +1,3 @@
-import { allocateAutomaticProxy } from './auto-proxy-allocation.js';
-import { taskConfigSchema } from '../contracts/schemas.js';
 import { isDeepStrictEqual } from 'node:util';
 import { createHash, randomUUID } from 'node:crypto';
 import type { TaskCreate, TaskBatchCreate } from '../contracts/schemas.js';
@@ -241,7 +239,6 @@ export class TaskManager {
         } = browser;
         nextConfig = json({ ...config, browser: { ...options, profileMode: 'isolated' } });
       }
-      nextConfig = json(await allocateAutomaticProxy(tx, id, taskConfigSchema.parse(nextConfig)));
       const attempt = task.attemptCount + 1;
       const run = await tx.taskRun.create({
         data: {

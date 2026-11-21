@@ -58,6 +58,7 @@ describe.skipIf(!enabled)('Playwright + PostgreSQL + BullMQ engine', () => {
       db,
       createLogger('error'),
       new WorkflowRegistry().register(workflow),
+      { probe: { check: async () => ({ healthy: true, latencyMs: 1 }) } },
     );
     server = createServer((req, res) => {
       if (req.method === 'POST') {
@@ -356,6 +357,221 @@ describe.skipIf(!enabled)('Playwright + PostgreSQL + BullMQ engine', () => {
     await engine.assignments.release(lease);
     const next = await engine.assignments.acquire(b.owner, p.id);
     await engine.assignments.release(next);
+  });
+  it('health-checks unknown proxies before balanced assignment and checks the leased endpoint again', async () => {
+    const pool = await Promise.all(
+      [3201, 3202, 3203].map((port) =>
+        db.proxy.create({
+          data: { host: '127.0.0.1', port, protocol: 'http', fingerprint: randomUUID() },
+        }),
+      ),
+    );
+    const probe = {
+      check: vi.fn(async (proxy: { port: number }) => {
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        return {
+          healthy: proxy.port !== 3203,
+          latencyMs: 1,
+          ...(proxy.port === 3203 ? { errorCode: 'PROXY_CONNECTION_FAILED' } : {}),
+        };
+      }),
+    };
+    const prepared = createEngine(
+      config,
+      db,
+      createLogger('error'),
+      new WorkflowRegistry().register(workflow),
+      { probe },
+    );
+    driver = async ({ execution }) => {
+      await execution.beforeExternalMutation();
+      return {
+        account: {
+          email: `prepared-${execution.runId}@example.test`,
+          username: 'prepared',
+          password: 'Fixture-only!123',
+          status: 'verified',
+        },
+      };
+    };
+    try {
+      const first = await run('RUNNING', {
+        domain: 'example.test',
+        browser: { proxyMode: 'auto' },
+      });
+      const second = await run('RUNNING', {
+        domain: 'example.test',
+        browser: { proxyMode: 'auto' },
+      });
+      await Promise.all([
+        prepared.executor.execute(first.execution),
+        prepared.executor.execute(second.execution),
+      ]);
+      const assigned = await db.task.findMany({
+        where: { id: { in: [first.task.id, second.task.id] } },
+        select: { config: true },
+      });
+      const ids = assigned.map((task) => (task.config as any).browser.assignedProxyId);
+      expect(new Set(ids).size).toBe(2);
+      expect(ids).not.toContain(pool[2].id);
+      expect(probe.check.mock.calls.filter(([proxy]) => proxy.port === 3201)).toHaveLength(2);
+      expect(probe.check.mock.calls.filter(([proxy]) => proxy.port === 3202)).toHaveLength(2);
+      expect(probe.check.mock.calls.filter(([proxy]) => proxy.port === 3203)).toHaveLength(1);
+      const events = await db.log.findMany({
+        where: { entityId: first.task.id },
+        orderBy: { createdAt: 'asc' },
+        select: { event: true },
+      });
+      const names = events.map((event) => event.event);
+      expect(names.indexOf('task.proxy_pool_checking')).toBeLessThan(
+        names.indexOf('task.proxy_assigned'),
+      );
+      expect(names.indexOf('task.proxy_ready')).toBeLessThan(names.indexOf('task.browser_opened'));
+      expect(await db.account.count()).toBe(2);
+    } finally {
+      await prepared.close();
+    }
+  });
+  it('stops before opening a browser if a rotated proxy fails its fresh leased check', async () => {
+    await db.proxy.create({
+      data: { host: '127.0.0.1', port: 3210, protocol: 'http', fingerprint: randomUUID() },
+    });
+    let calls = 0;
+    const probe = {
+      check: async () => ({
+        healthy: ++calls === 1,
+        latencyMs: 1,
+        errorCode: calls > 1 ? 'PROXY_CONNECTION_FAILED' : undefined,
+      }),
+    };
+    const prepared = createEngine(
+      config,
+      db,
+      createLogger('error'),
+      new WorkflowRegistry().register(workflow),
+      { probe },
+    );
+    try {
+      const item = await run('RUNNING', { domain: 'example.test', browser: { proxyMode: 'auto' } });
+      await expect(prepared.executor.execute(item.execution)).rejects.toMatchObject({
+        code: 'PROXY_HEALTH_CHECK_FAILED',
+        retryable: true,
+      });
+      expect(calls).toBe(2);
+      expect(prepared.browsers.status.processes).toBe(0);
+      expect(await db.account.count()).toBe(0);
+      expect((await db.taskRun.findUniqueOrThrow({ where: { id: item.record.id } })).outcome).toBe(
+        'NOT_CREATED',
+      );
+      expect(await db.proxyAssignment.count({ where: { releasedAt: null } })).toBe(0);
+    } finally {
+      await prepared.close();
+    }
+  });
+  it.each([false, true])(
+    'handles a stale automatic reservation without changing saved identities (saved=%s)',
+    async (saved) => {
+      const old = await db.proxy.create({
+        data: {
+          host: '127.0.0.1',
+          port: 3230,
+          protocol: 'http',
+          fingerprint: randomUUID(),
+          status: 'healthy',
+        },
+      });
+      const ready = await db.proxy.create({
+        data: { host: '127.0.0.1', port: 3231, protocol: 'http', fingerprint: randomUUID() },
+      });
+      const item = await run('RUNNING', {
+        domain: 'example.test',
+        browser: { proxyMode: 'auto', assignedProxyId: old.id },
+      });
+      if (saved)
+        await db.browserProfile.create({
+          data: {
+            installationId: config.INSTALLATION_ID,
+            name: `task-${item.task.id}`,
+            assignedProxyId: old.id,
+            stateVersion: 1,
+            stateCipher: 'fixture-not-read',
+          },
+        });
+      const prepared = createEngine(
+        config,
+        db,
+        createLogger('error'),
+        new WorkflowRegistry().register(workflow),
+        {
+          probe: { check: async (proxy) => ({ healthy: proxy.port === 3231, latencyMs: 1 }) },
+        },
+      );
+      driver = async ({ execution }) => {
+        await execution.beforeExternalMutation();
+        return {
+          account: {
+            email: `reassigned-${execution.runId}@example.test`,
+            username: 'reassigned',
+            password: 'Fixture-only!123',
+            status: 'verified',
+          },
+        };
+      };
+      try {
+        if (saved) {
+          await expect(prepared.executor.execute(item.execution)).rejects.toMatchObject({
+            code: 'NO_PROXY_CAPACITY',
+          });
+          expect(prepared.browsers.status.processes).toBe(0);
+        } else await prepared.executor.execute(item.execution);
+        const task = await db.task.findUniqueOrThrow({ where: { id: item.task.id } });
+        expect((task.config as any).browser.assignedProxyId).toBe(saved ? old.id : ready.id);
+        expect(await db.account.count()).toBe(saved ? 0 : 1);
+      } finally {
+        await prepared.close();
+      }
+    },
+  );
+  it('rechecks old Healthy snapshots at execution time instead of trusting queued-time health', async () => {
+    const proxy = await db.proxy.create({
+      data: {
+        host: '127.0.0.1',
+        port: 3220,
+        protocol: 'http',
+        fingerprint: randomUUID(),
+        status: 'healthy',
+      },
+    });
+    await db.proxyHealth.create({
+      data: { proxyId: proxy.id, healthy: true, checkedAt: new Date(Date.now() - 121000) },
+    });
+    const probe = {
+      check: vi.fn(async () => ({
+        healthy: false,
+        latencyMs: null,
+        errorCode: 'PROXY_CONNECTION_FAILED',
+      })),
+    };
+    const prepared = createEngine(
+      config,
+      db,
+      createLogger('error'),
+      new WorkflowRegistry().register(workflow),
+      { probe },
+    );
+    try {
+      const item = await run('RUNNING', { domain: 'example.test', browser: { proxyMode: 'auto' } });
+      await expect(prepared.executor.execute(item.execution)).rejects.toMatchObject({
+        code: 'NO_HEALTHY_PROXY',
+        retryable: true,
+      });
+      expect(probe.check).toHaveBeenCalledTimes(1);
+      expect(prepared.browsers.status.processes).toBe(0);
+      expect(await db.proxyAssignment.count()).toBe(0);
+      expect(await db.account.count()).toBe(0);
+    } finally {
+      await prepared.close();
+    }
   });
   it('waits for an automatically assigned proxy instead of switching IP or failing immediately', async () => {
     const proxy = await db.proxy.create({

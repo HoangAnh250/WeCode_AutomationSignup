@@ -2,8 +2,8 @@ import type { Transaction } from '../core/events.js';
 import type { TaskCreate } from '../contracts/schemas.js';
 import { AppError } from '../core/errors.js';
 
-// Reserve a proxy for each automatic task before enqueueing. One transaction lock
-// serializes concurrent Start commands; runtime leases remain capacity-limited.
+// Reserve a proxy during automatic task execution after pool preflight. One transaction
+// lock serializes concurrent reservations; runtime leases remain capacity-limited.
 export async function allocateAutomaticProxy(
   tx: Transaction,
   taskId: string,
@@ -32,7 +32,8 @@ export async function allocateAutomaticProxy(
     throw new AppError(
       'NO_HEALTHY_PROXY',
       'Auto assign requires a healthy enabled Chromium-compatible proxy. Run proxy health checks or explicitly select Local.',
-      422,
+      503,
+      true,
     );
   return { ...config, browser: { ...browser, assignedProxyId: candidates[0].id } };
 }

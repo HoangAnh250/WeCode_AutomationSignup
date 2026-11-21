@@ -1,3 +1,4 @@
+import type { ProxyPreflight } from './ProxyPreflight.js';
 import { taskEvent } from '../core/task-events.js';
 import type { EmailVerificationCoordinator } from './EmailVerificationCoordinator.js';
 import { errors } from 'playwright';
@@ -36,6 +37,7 @@ export interface EngineDependencies {
   sessions: SessionManager;
   storage: StorageStateManager;
   workflows: WorkflowRegistry;
+  proxyHealth: ProxyPreflight;
 }
 export class WorkerExecutor implements AutomationExecutor {
   constructor(private readonly deps: EngineDependencies) {}
@@ -111,8 +113,8 @@ export class WorkerExecutor implements AutomationExecutor {
           'warn',
         );
     };
-    const config = taskConfigSchema.parse(execution.config);
-    const options = browserTaskSchema.parse(config.browser ?? {});
+    let config = taskConfigSchema.parse(execution.config);
+    let options = browserTaskSchema.parse(config.browser ?? {});
     // A single run has a single business-commit fence. Batch orchestration creates child tasks.
     if (config.count !== 1)
       throw new AppError(
@@ -148,6 +150,9 @@ export class WorkerExecutor implements AutomationExecutor {
     };
     const guarded: ExecutionContext = {
       ...execution,
+      get config() {
+        return config;
+      },
       get checkpoint() {
         return execution.checkpoint;
       },
@@ -177,6 +182,18 @@ export class WorkerExecutor implements AutomationExecutor {
     deadline.unref();
     try {
       await check();
+      if (
+        options.proxyMode === 'auto' &&
+        !config.proxyId &&
+        !options.profileId &&
+        !options.sessionId
+      ) {
+        await taskEvent(d.db, 'task.proxy_pool_checking', execution.taskId, execution.runId);
+        config = await d.proxyHealth.reserve(guarded);
+        options = browserTaskSchema.parse(config.browser ?? {});
+        await check();
+        await taskEvent(d.db, 'task.proxy_assigned', execution.taskId, execution.runId);
+      }
       await taskEvent(d.db, 'task.resources_waiting', execution.taskId, execution.runId);
       profile = await d.profiles.acquire(
         owner,
@@ -265,6 +282,12 @@ export class WorkerExecutor implements AutomationExecutor {
           }
           await new Promise<void>((resolve) => setTimeout(resolve, 250));
         }
+      }
+      if (proxy) {
+        await taskEvent(d.db, 'task.proxy_checking', execution.taskId, execution.runId);
+        await d.proxyHealth.checkAssigned(proxy.proxy.id);
+        await check();
+        await taskEvent(d.db, 'task.proxy_ready', execution.taskId, execution.runId);
       }
       await d.profiles.repository.bindProxy(profile, proxy?.proxy.id ?? null);
       let lastRenew = Date.now();

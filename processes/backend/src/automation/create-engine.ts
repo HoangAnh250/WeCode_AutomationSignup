@@ -1,3 +1,7 @@
+import { ProxyPreflight } from './ProxyPreflight.js';
+import { ProxyManager } from '../services/proxy.service.js';
+import { ProxyRepository } from '../repositories/proxy.repository.js';
+import { NodeProxyProbe, type ProxyProbe } from '../infrastructure/proxy-probe.js';
 import { EmailVerificationCoordinator } from './EmailVerificationCoordinator.js';
 import { EmailManager } from '../services/email.service.js';
 import { EmailRepository } from '../repositories/email.repository.js';
@@ -23,6 +27,7 @@ export function createEngine(
   db: Database,
   logger: Logger,
   workflows = new WorkflowRegistry(),
+  options: { probe?: ProxyProbe } = {},
 ) {
   const cipher = new AesSecretCipher(config.ENCRYPTION_KEY);
   const accounts = new AccountManager(new AccountRepository(db), cipher);
@@ -51,6 +56,15 @@ export function createEngine(
     rotation,
     sessions,
     workflows,
+    proxyHealth: new ProxyPreflight(
+      db,
+      new ProxyManager(
+        new ProxyRepository(db),
+        cipher,
+        options.probe ?? new NodeProxyProbe(config.PROXY_PROBE_URL),
+        config.ENCRYPTION_KEY,
+      ),
+    ),
   };
   return {
     ...dependencies,
